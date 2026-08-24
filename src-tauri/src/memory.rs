@@ -48,31 +48,32 @@ pub mod mask {
     pub const FREEZES: u32 = STANDBYLIST | MODIFIEDLIST;
 
     /// Region names for display / notifications.
+    /// Region keys (matching the frontend i18n `regions.*` keys) for display.
     pub fn names(value: u32) -> Vec<&'static str> {
         let mut out = Vec::new();
         if value & WORKINGSET != 0 {
-            out.push("Working Set");
+            out.push("workingSet");
         }
         if value & SYSTEMFILECACHE != 0 {
-            out.push("System File Cache");
+            out.push("systemFileCache");
         }
         if value & MODIFIEDFILECACHE != 0 {
-            out.push("Modified File Cache");
+            out.push("modifiedFileCache");
         }
         if value & MODIFIEDLIST != 0 {
-            out.push("Modified Page List");
+            out.push("modifiedList");
         }
         if value & STANDBYLIST != 0 {
-            out.push("Standby List");
+            out.push("standbyList");
         }
         if value & STANDBYPRIORITY0LIST != 0 {
-            out.push("Standby Priority-0 List");
+            out.push("standbyPriority0");
         }
         if value & REGISTRYCACHE != 0 {
-            out.push("Registry Cache (win8.1+)");
+            out.push("registryCache");
         }
         if value & COMBINEMEMORYLISTS != 0 {
-            out.push("Combine Memory Lists (win10+)");
+            out.push("combineMemoryLists");
         }
         out
     }
@@ -139,45 +140,27 @@ pub fn get_memory_info() -> MemoryInfo {
     let mut info = MemoryInfo::default();
 
     unsafe {
-        // Physical memory (basic)
-        let mut basic: SYSTEM_BASIC_INFORMATION = Default::default();
-        let status = NtQuerySystemInformation(
-            SystemInformationClass::SystemBasicInformation as i32,
-            &mut basic as *mut _ as *mut core::ffi::c_void,
-            core::mem::size_of::<SYSTEM_BASIC_INFORMATION>() as u32,
-            core::ptr::null_mut(),
-        );
-        if NT_SUCCESS(status) {
-            let page_size = basic.PageSize as u64;
-            info.physical_memory.total_bytes = basic.NumberOfPhysicalPages as u64 * page_size;
-        }
-
-        // Physical memory (performance / available)
+        // Physical memory (standard, reliable API).
         //
-        // `SystemPerformanceInformation` is a very large structure; rather than
-        // transcribing every field we allocate a large buffer and read the
-        // leading `AvailablePages` (first field, type ULONG_PTR).
-        const PERF_BUF: usize = 0x800;
-        let mut perf_buf = vec![0u8; PERF_BUF];
-        let status = NtQuerySystemInformation(
-            SystemInformationClass::SystemPerformanceInformation as i32,
-            perf_buf.as_mut_ptr() as *mut core::ffi::c_void,
-            PERF_BUF as u32,
-            core::ptr::null_mut(),
-        );
-        if NT_SUCCESS(status) {
-            let page_size = basic.PageSize as u64;
-            let available_pages =
-                u64::from_ne_bytes(perf_buf[0..8].try_into().expect("perf buf len")) as u64;
-            info.physical_memory.free_bytes = available_pages * page_size;
+        // `GlobalMemoryStatusEx` returns the physical memory totals and the
+        // current memory load as a percentage — this is the most robust source
+        // and matches what other system utilities display. The previous
+        // approach (reading a byte buffer from SystemPerformanceInformation)
+        // could fail when the buffer was too small, leaving usage at 0%.
+        let mut mem_status: windows::Win32::System::SystemInformation::MEMORYSTATUSEX =
+            std::mem::zeroed();
+        mem_status.dwLength = core::mem::size_of::<
+            windows::Win32::System::SystemInformation::MEMORYSTATUSEX,
+        >() as u32;
+        if windows::Win32::System::SystemInformation::GlobalMemoryStatusEx(&mut mem_status)
+            .is_ok()
+        {
+            info.physical_memory.total_bytes = mem_status.ullTotalPhys;
+            info.physical_memory.free_bytes = mem_status.ullAvailPhys;
             info.physical_memory.used_bytes =
-                info.physical_memory.total_bytes.saturating_sub(info.physical_memory.free_bytes);
-            let (p, pf) = calc_percent(
-                info.physical_memory.used_bytes,
-                info.physical_memory.total_bytes,
-            );
-            info.physical_memory.percent = p;
-            info.physical_memory.percent_f = pf;
+                mem_status.ullTotalPhys.saturating_sub(mem_status.ullAvailPhys);
+            info.physical_memory.percent = mem_status.dwMemoryLoad;
+            info.physical_memory.percent_f = mem_status.dwMemoryLoad as f64;
         }
 
         // System file cache
@@ -198,8 +181,17 @@ pub fn get_memory_info() -> MemoryInfo {
             info.system_cache.percent_f = pf;
         }
 
-        // Page file
-        info.page_file = read_pagefile_info(basic.PageSize as u64);
+        // Page file (needs the page size from SYSTEM_BASIC_INFORMATION).
+        let mut basic: SYSTEM_BASIC_INFORMATION = Default::default();
+        let status = NtQuerySystemInformation(
+            SystemInformationClass::SystemBasicInformation as i32,
+            &mut basic as *mut _ as *mut core::ffi::c_void,
+            core::mem::size_of::<SYSTEM_BASIC_INFORMATION>() as u32,
+            core::ptr::null_mut(),
+        );
+        if NT_SUCCESS(status) {
+            info.page_file = read_pagefile_info(basic.PageSize as u64);
+        }
     }
 
     info
@@ -436,6 +428,20 @@ mod tests {
         );
         // percent_f in [0,100].
         assert!(info.physical_memory.percent_f >= 0.0 && info.physical_memory.percent_f <= 100.0);
+
+        // The memory-load percentage must reflect a real (nonzero) usage on a
+        // running system; a stuck 0% was the reported bug.
+        assert!(
+            info.physical_memory.percent > 0,
+            "physical memory percent should be > 0 on a running system, got 0%"
+        );
+        eprintln!(
+            "physical: total={} used={} free={} percent={}",
+            info.physical_memory.total_bytes,
+            info.physical_memory.used_bytes,
+            info.physical_memory.free_bytes,
+            info.physical_memory.percent
+        );
     }
 
     #[test]
@@ -452,8 +458,13 @@ mod tests {
         let result = clean_memory(mask::ALL, false, true);
         // Under autoclean disallow, freezing regions must be stripped.
         assert_eq!(result.applied_mask & mask::FREEZES, 0);
-        // Region names should reflect the applied mask (no freeze regions).
-        assert!(!result.regions.iter().any(|n| n.contains("Standby List") || n.contains("Modified Page List")));
+        // Region keys should reflect the applied mask (no freeze regions).
+        assert!(
+            !result
+                .regions
+                .iter()
+                .any(|n| n == &"standbyList" || n == &"modifiedList")
+        );
 
         // Full manual clean keeps all regions.
         let full = clean_memory(mask::ALL, true, false);

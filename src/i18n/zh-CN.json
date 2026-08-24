@@ -1,0 +1,96 @@
+{
+  "app": {
+    "name": "Mem Reduct",
+    "main": "主界面",
+    "settings": "设置",
+    "language": "语言"
+  },
+  "note": {
+    "freeze": "可能导致卡顿",
+    "win10": "需 Windows 10+",
+    "win81": "需 Windows 8.1+"
+  },
+  "tray": {
+    "clean": "清理内存",
+    "show": "显示窗口",
+    "settings": "设置",
+    "about": "关于",
+    "exit": "退出",
+    "website": "官方网站"
+  },
+  "main": {
+    "memoryUsed": "内存已用",
+    "physical": "物理内存",
+    "pageFile": "页面文件",
+    "systemCache": "系统缓存",
+    "cleanRegions": "清理区域",
+    "all": "全部",
+    "default": "默认",
+    "cleanMemory": "清理内存",
+    "cleaning": "清理中…",
+    "released": "释放了",
+    "nothing": "未清理任何区域",
+    "configLocation": "配置",
+    "portable": "便携模式",
+    "appdata": "应用数据",
+    "of": "共"
+  },
+  "confirm": {
+    "title": "确认清理以下区域?",
+    "clean": "确认清理",
+    "cancel": "取消"
+  },
+  "settings": {
+    "general": "常规",
+    "memory": "内存",
+    "appearance": "外观",
+    "tray": "托盘",
+    "advanced": "高级",
+    "save": "保存",
+    "reset": "重置",
+    "alwaysOnTop": "窗口置顶",
+    "startMinimized": "启动时最小化",
+    "showCleanConfirmation": "清理前确认",
+    "checkUpdates": "检查更新",
+    "darkTheme": "深色主题",
+    "autoReduct": "按占用率自动清理",
+    "autoReductThreshold": "自动清理阈值(%)",
+    "autoReductInterval": "按间隔自动清理",
+    "interval": "间隔(分钟)",
+    "allowStandbyCleanup": "自动清理时允许清理待机列表",
+    "standbyHint": "待机/修改列表可能导致短暂卡顿，默认在自动清理中禁用。",
+    "textColor": "文字颜色",
+    "backgroundColor": "背景颜色",
+    "warningColor": "警告颜色",
+    "dangerColor": "危险颜色",
+    "trayBorder": "托盘显示边框",
+    "trayRoundCorners": "托盘圆角",
+    "trayTransparency": "托盘透明",
+    "trayChangeBg": "警告/危险时切换背景",
+    "doubleClickAction": "双击动作",
+    "middleClickAction": "中键动作",
+    "warningLevel": "警告级别(%)",
+    "dangerLevel": "危险级别(%)",
+    "notificationSound": "通知声音",
+    "showCleanResult": "显示清理结果气泡",
+    "logCleanResults": "记录清理结果",
+    "hotkeyClean": "全局清理热键",
+    "hotkeyHint": "默认热键：Ctrl+F1（可在应用内修改）"
+  },
+  "regions": {
+    "workingSet": "工作集",
+    "systemFileCache": "系统文件缓存",
+    "modifiedFileCache": "修改文件缓存",
+    "modifiedList": "修改页列表",
+    "standbyList": "待机列表",
+    "standbyPriority0": "低优先级待机列表",
+    "registryCache": "注册表缓存",
+    "combineMemoryLists": "合并内存列表"
+  },
+  "result": {
+    "auto": "自动清理",
+    "manual": "手动清理",
+    "hotkey": "热键清理",
+    "cmdline": "命令行清理"
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "app": {
+    "name": "Mem Reduct",
+    "main": "Main",
+    "settings": "Settings",
+    "language": "Language"
+  },
+  "note": {
+    "freeze": "may freeze",
+    "win10": "Win10+",
+    "win81": "Win8.1+"
+  },
+  "tray": {
+    "clean": "Clean memory",
+    "show": "Show window",
+    "settings": "Settings",
+    "about": "About",
+    "exit": "Exit",
+    "website": "Website"
+  },
+  "main": {
+    "memoryUsed": "Memory used",
+    "physical": "Physical",
+    "pageFile": "Page file",
+    "systemCache": "System cache",
+    "cleanRegions": "Clean regions",
+    "all": "All",
+    "default": "Default",
+    "cleanMemory": "Clean Memory",
+    "cleaning": "Cleaning…",
+    "released": "Freed",
+    "nothing": "nothing cleaned",
+    "configLocation": "Config",
+    "portable": "portable",
+    "appdata": "appdata",
+    "of": "of"
+  },
+  "confirm": {
+    "title": "Confirm cleaning these regions?",
+    "clean": "Clean",
+    "cancel": "Cancel"
+  },
+  "settings": {
+    "general": "General",
+    "memory": "Memory",
+    "appearance": "Appearance",
+    "tray": "Tray",
+    "advanced": "Advanced",
+    "save": "Save",
+    "reset": "Reset",
+    "alwaysOnTop": "Always on top",
+    "startMinimized": "Start minimized",
+    "showCleanConfirmation": "Show clean confirmation",
+    "checkUpdates": "Check updates",
+    "darkTheme": "Dark theme",
+    "autoReduct": "Auto-reduct by usage",
+    "autoReductThreshold": "Auto-reduct threshold (%)",
+    "autoReductInterval": "Auto-reduct by interval",
+    "interval": "Interval (minutes)",
+    "allowStandbyCleanup": "Allow standby list cleanup in auto",
+    "standbyHint": "Standby/modified lists can cause brief freezes; disabled in auto by default.",
+    "textColor": "Text color",
+    "backgroundColor": "Background color",
+    "warningColor": "Warning color",
+    "dangerColor": "Danger color",
+    "trayBorder": "Tray shows border",
+    "trayRoundCorners": "Tray round corners",
+    "trayTransparency": "Tray transparency",
+    "trayChangeBg": "Change bg on warning/danger",
+    "doubleClickAction": "Double-click action",
+    "middleClickAction": "Middle-click action",
+    "warningLevel": "Warning level (%)",
+    "dangerLevel": "Danger level (%)",
+    "notificationSound": "Notification sound",
+    "showCleanResult": "Show clean result balloon",
+    "logCleanResults": "Log clean results",
+    "hotkeyClean": "Global clean hotkey",
+    "hotkeyHint": "Default hotkey: Ctrl+F1 (change in app)"
+  },
+  "regions": {
+    "workingSet": "Working Set",
+    "systemFileCache": "System File Cache",
+    "modifiedFileCache": "Modified File Cache",
+    "modifiedList": "Modified Page List",
+    "standbyList": "Standby List",
+    "standbyPriority0": "Standby Priority-0 List",
+    "registryCache": "Registry Cache",
+    "combineMemoryLists": "Combine Memory Lists"
+  },
+  "result": {
+    "auto": "Auto",
+    "manual": "Manual",
+    "hotkey": "Hotkey",
+    "cmdline": "Command-line"
+  }
+}

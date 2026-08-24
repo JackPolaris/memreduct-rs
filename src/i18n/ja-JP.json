@@ -1,0 +1,96 @@
+{
+  "app": {
+    "name": "Mem Reduct",
+    "main": "メイン",
+    "settings": "設定",
+    "language": "言語"
+  },
+  "note": {
+    "freeze": "一時的なフリーズの恐れ",
+    "win10": "Windows 10+ が必要",
+    "win81": "Windows 8.1+ が必要"
+  },
+  "tray": {
+    "clean": "メモリをクリーン",
+    "show": "ウィンドウを表示",
+    "settings": "設定",
+    "about": "情報",
+    "exit": "終了",
+    "website": "公式サイト"
+  },
+  "main": {
+    "memoryUsed": "メモリ使用量",
+    "physical": "物理メモリ",
+    "pageFile": "ページファイル",
+    "systemCache": "システムキャッシュ",
+    "cleanRegions": "クリーン領域",
+    "all": "すべて",
+    "default": "デフォルト",
+    "cleanMemory": "メモリをクリーン",
+    "cleaning": "クリーン中…",
+    "released": "解放済み",
+    "nothing": "クリーン対象なし",
+    "configLocation": "設定",
+    "portable": "ポータブル",
+    "appdata": "アプリデータ",
+    "of": "合計"
+  },
+  "confirm": {
+    "title": "以下の領域をクリーンしますか?",
+    "clean": "クリーン",
+    "cancel": "キャンセル"
+  },
+  "settings": {
+    "general": "一般",
+    "memory": "メモリ",
+    "appearance": "外観",
+    "tray": "トレイ",
+    "advanced": "詳細",
+    "save": "保存",
+    "reset": "リセット",
+    "alwaysOnTop": "常に最前面",
+    "startMinimized": "最小化して起動",
+    "showCleanConfirmation": "クリーン前に確認",
+    "checkUpdates": "更新を確認",
+    "darkTheme": "ダークテーマ",
+    "autoReduct": "使用率で自動クリーン",
+    "autoReductThreshold": "自動クリーンしきい値(%)",
+    "autoReductInterval": "間隔で自動クリーン",
+    "interval": "間隔(分)",
+    "allowStandbyCleanup": "自動クリーンでスタンバイリストを許可",
+    "standbyHint": "スタンバイ/変更リストは一時的なフリーズの原因になるため、自動では既定で無効です。",
+    "textColor": "文字色",
+    "backgroundColor": "背景色",
+    "warningColor": "警告色",
+    "dangerColor": "危険色",
+    "trayBorder": "トレイに枠を表示",
+    "trayRoundCorners": "トレイ角丸",
+    "trayTransparency": "トレイ透過",
+    "trayChangeBg": "警告/危険時に背景を変更",
+    "doubleClickAction": "ダブルクリック動作",
+    "middleClickAction": "中央クリック動作",
+    "warningLevel": "警告レベル(%)",
+    "dangerLevel": "危険レベル(%)",
+    "notificationSound": "通知音",
+    "showCleanResult": "クリーン結果バルーンを表示",
+    "logCleanResults": "クリーン結果を記録",
+    "hotkeyClean": "グローバルクリーンショートカット",
+    "hotkeyHint": "既定: Ctrl+F1（アプリ内で変更可）"
+  },
+  "regions": {
+    "workingSet": "ワーキングセット",
+    "systemFileCache": "システムファイルキャッシュ",
+    "modifiedFileCache": "変更ファイルキャッシュ",
+    "modifiedList": "変更ページリスト",
+    "standbyList": "スタンバイリスト",
+    "standbyPriority0": "低優先スタンバイリスト",
+    "registryCache": "レジストリキャッシュ",
+    "combineMemoryLists": "メモリリスト統合"
+  },
+  "result": {
+    "auto": "自動クリーン",
+    "manual": "手動クリーン",
+    "hotkey": "ショートカット",
+    "cmdline": "コマンドライン"
+  }
+}

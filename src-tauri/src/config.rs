@@ -74,7 +74,7 @@ impl Default for Config {
             show_reduct_confirmation: true,
             check_updates: false,
             use_dark_theme: false,
-            language: "en-US".into(),
+            language: "zh-CN".into(),
 
             autoreduct_enable: false,
             autoreduct_value: 90,

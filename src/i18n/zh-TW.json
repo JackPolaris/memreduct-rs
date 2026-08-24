@@ -1,0 +1,96 @@
+{
+  "app": {
+    "name": "Mem Reduct",
+    "main": "主畫面",
+    "settings": "設定",
+    "language": "語言"
+  },
+  "note": {
+    "freeze": "可能造成卡頓",
+    "win10": "需 Windows 10+",
+    "win81": "需 Windows 8.1+"
+  },
+  "tray": {
+    "clean": "清理記憶體",
+    "show": "顯示視窗",
+    "settings": "設定",
+    "about": "關於",
+    "exit": "結束",
+    "website": "官方網站"
+  },
+  "main": {
+    "memoryUsed": "記憶體已用",
+    "physical": "實體記憶體",
+    "pageFile": "分頁檔",
+    "systemCache": "系統快取",
+    "cleanRegions": "清理區域",
+    "all": "全部",
+    "default": "預設",
+    "cleanMemory": "清理記憶體",
+    "cleaning": "清理中…",
+    "released": "釋放了",
+    "nothing": "未清理任何區域",
+    "configLocation": "設定位置",
+    "portable": "可攜式模式",
+    "appdata": "應用程式資料",
+    "of": "共"
+  },
+  "confirm": {
+    "title": "確認清理以下區域?",
+    "clean": "確認清理",
+    "cancel": "取消"
+  },
+  "settings": {
+    "general": "一般",
+    "memory": "記憶體",
+    "appearance": "外觀",
+    "tray": "系統匣",
+    "advanced": "進階",
+    "save": "儲存",
+    "reset": "重設",
+    "alwaysOnTop": "視窗置頂",
+    "startMinimized": "啟動時最小化",
+    "showCleanConfirmation": "清理前確認",
+    "checkUpdates": "檢查更新",
+    "darkTheme": "深色主題",
+    "autoReduct": "按使用率自動清理",
+    "autoReductThreshold": "自動清理臨界值(%)",
+    "autoReductInterval": "按時間間隔自動清理",
+    "interval": "間隔(分鐘)",
+    "allowStandbyCleanup": "自動清理時允許清理待機清單",
+    "standbyHint": "待機/修改清單可能導致短暫卡頓，預設在自動清理中停用。",
+    "textColor": "文字顏色",
+    "backgroundColor": "背景顏色",
+    "warningColor": "警告顏色",
+    "dangerColor": "危險顏色",
+    "trayBorder": "系統匣顯示邊框",
+    "trayRoundCorners": "系統匣圓角",
+    "trayTransparency": "系統匣透明",
+    "trayChangeBg": "警告/危險時切換背景",
+    "doubleClickAction": "雙擊動作",
+    "middleClickAction": "中鍵動作",
+    "warningLevel": "警告等級(%)",
+    "dangerLevel": "危險等級(%)",
+    "notificationSound": "通知音效",
+    "showCleanResult": "顯示清理結果氣泡",
+    "logCleanResults": "記錄清理結果",
+    "hotkeyClean": "全域清理熱鍵",
+    "hotkeyHint": "預設熱鍵：Ctrl+F1（可在應用程式內修改）"
+  },
+  "regions": {
+    "workingSet": "工作集",
+    "systemFileCache": "系統檔案快取",
+    "modifiedFileCache": "修改檔案快取",
+    "modifiedList": "修改分頁清單",
+    "standbyList": "待機清單",
+    "standbyPriority0": "低優先權待機清單",
+    "registryCache": "登錄檔快取",
+    "combineMemoryLists": "合併記憶體清單"
+  },
+  "result": {
+    "auto": "自動清理",
+    "manual": "手動清理",
+    "hotkey": "熱鍵清理",
+    "cmdline": "命令列清理"
+  }
+}
