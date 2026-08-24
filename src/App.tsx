@@ -11,6 +11,7 @@ import {
   getConfigLocation,
   getMemoryInfo,
   getOsInfo,
+  getVersion,
   isElevated,
   notify,
   saveConfig,
@@ -79,6 +80,7 @@ export default function App() {
   const [elevated, setElevated] = useState<boolean>(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [toastSeq, setToastSeq] = useState(0);
+  const [version, setVersion] = useState<string>("3.5.3");
 
   // Theme: "light" | "dark" | "system" (the legacy use_dark_theme flag is
   // honoured only for configs saved before the three-state theme existed).
@@ -128,6 +130,7 @@ export default function App() {
     getMemoryInfo().then(setInfo);
     getOsInfo().then(setOsInfo);
     getConfigLocation().then(setConfigLocation);
+    getVersion().then(setVersion).catch(() => {});
     isElevated().then(setElevated).catch(() => setElevated(false));
     getConfig().then((c) => {
       setConfig(c);
@@ -135,16 +138,15 @@ export default function App() {
       if (c.language && c.language !== i18n.language) {
         i18n.changeLanguage(c.language);
       }
-      // Startup auto-update check (if enabled and a repo is configured).
-      if (c.check_updates && c.update_repo.trim()) {
-        checkForUpdate(c.update_repo, c.update_pubkey)
-          .then((r) => {
-            if (r.available) {
-              pushToast(t("settings.updateAvailable"), `v${r.version}`, "info");
-            }
-          })
-          .catch(() => {});
-      }
+      // Startup update check (always on): if a new version exists, show a
+      // toast so the user can tap it to download & install.
+      checkForUpdate()
+        .then((r) => {
+          if (r.available) {
+            pushToast(t("settings.updateAvailable"), `v${r.version}`, "info");
+          }
+        })
+        .catch(() => {});
     });
 
     const unlistenMemory = listen<MemoryInfo>("memory-update", (e) => {
@@ -260,7 +262,7 @@ export default function App() {
       </header>
 
       <main className="content">
-        {tab === "main" ? (
+        <div style={{ display: tab === "main" ? "flex" : "none" , flexDirection: "column", gap: 14 }}>
           <>
             <div className="statusbar">
               <span className={`statuschip ${pressure}`}>
@@ -373,9 +375,12 @@ export default function App() {
               )}
             </div>
           </>
-        ) : config ? (
-          <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} />
-        ) : null}
+        </div>
+        <div style={{ display: tab === "settings" ? "flex" : "none", flex: 1, minHeight: 0 }}>
+          {config ? (
+            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} />
+          ) : null}
+        </div>
       </main>
 
       {confirmMask !== null && (
@@ -485,10 +490,12 @@ function SettingsPanel({
   config,
   t,
   onSave,
+  version,
 }: {
   config: Config;
   t: (k: string) => string;
   onSave: (c: Config) => void;
+  version: string;
 }) {
   const [draft, setDraft] = useState<Config>(config);
   const [section, setSection] = useState<Section>("general");
@@ -528,22 +535,17 @@ function SettingsPanel({
     });
   };
 
-  const runUpdateCheck = async (c: Config) => {
+  // Single "Check for updates" flow: check → if a new version exists, download
+  // and install it in the background, then the app restarts automatically.
+  const runUpdateCheck = async () => {
     try {
-      const r = await checkForUpdate(c.update_repo, c.update_pubkey);
+      const r = await checkForUpdate();
       if (r.available) {
-        notify(t("settings.updateAvailable"), `v${r.version}`, true).catch(() => {});
+        notify(t("settings.updateInstalling"), `v${r.version}`, true).catch(() => {});
+        await downloadAndInstall();
       } else {
         notify(t("settings.updateNone"), `${t("settings.version")} ${r.current_version}`, true).catch(() => {});
       }
-    } catch (e) {
-      notify(t("settings.updateError"), String(e), true).catch(() => {});
-    }
-  };
-
-  const runUpdateInstall = async (c: Config) => {
-    try {
-      await downloadAndInstall(c.update_repo, c.update_pubkey);
     } catch (e) {
       notify(t("settings.updateError"), String(e), true).catch(() => {});
     }
@@ -579,25 +581,20 @@ function SettingsPanel({
             <>
               <Toggle label={t("settings.autostart")} icon={<IconBolt size={15} />} checked={autostart} onChange={toggleAutostart} />
               <div className="hint">{t("settings.autostartHint")}</div>
-              <Toggle label={t("settings.alwaysOnTop")} icon={<IconSettings size={15} />} checked={draft.always_on_top} onChange={(v) => set("always_on_top", v)} />
               <Toggle label={t("settings.showCleanConfirmation")} icon={<IconSparkles size={15} />} checked={draft.show_reduct_confirmation} onChange={(v) => set("show_reduct_confirmation", v)} />
-              <Toggle label={t("settings.autoCheck")} icon={<IconSparkles size={15} />} checked={draft.check_updates} onChange={(v) => set("check_updates", v)} />
               <div className="setrow">
-                <span className="setrow-label">{t("settings.updateRepo")}</span>
-                <span className="setrow-value">{draft.update_repo}</span>
+                <span className="setrow-label">
+                  <span className="icon"><IconSparkles size={15} /></span>
+                  {t("settings.checkUpdates")}
+                </span>
+                <button className="chipbtn" onClick={() => runUpdateCheck()}>
+                  {t("settings.checkNow")}
+                </button>
               </div>
               <div className="setrow">
-                <span className="setrow-label">{t("settings.autoUpdate")}</span>
-                <div className="setrow-actions">
-                  <button className="chipbtn" onClick={() => runUpdateCheck(draft)}>
-                    {t("settings.checkNow")}
-                  </button>
-                  <button className="chipbtn" onClick={() => runUpdateInstall(draft)}>
-                    {t("settings.installNow")}
-                  </button>
-                </div>
+                <span className="setrow-label">{t("settings.version")}</span>
+                <span className="setrow-value">v{version}</span>
               </div>
-              <div className="hint">{t("settings.updateHint")}</div>
               <div className="setrow">
                 <span className="setrow-label">
                   <span className="icon"><IconDrive size={15} /></span>

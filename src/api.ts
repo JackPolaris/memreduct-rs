@@ -92,15 +92,14 @@ export interface UpdateInfo {
   body: string;
   current_version: string;
 }
-export const checkForUpdate = (repo: string, pubkey: string) =>
-  invoke<UpdateInfo>("check_for_update", { repo, pubkey });
-export const downloadAndInstall = (repo: string, pubkey: string) =>
-  invoke<void>("download_and_install", { repo, pubkey });
+export const checkForUpdate = () => invoke<UpdateInfo>("check_for_update");
+export const downloadAndInstall = () => invoke<void>("download_and_install");
 export const getConfig = () => invoke<Config>("get_config");
 export const saveConfig = (config: Config) =>
   invoke<void>("save_config", { config });
 export const getConfigLocation = () => invoke<string>("get_config_location");
 export const getOsInfo = () => invoke<OsInfo>("get_os_info");
+export const getVersion = () => invoke<string>("get_version");
 export const getAutostart = () => invoke<boolean>("get_autostart");
 export const setAutostart = (enabled: boolean) =>
   invoke<string>("set_autostart", { enabled });

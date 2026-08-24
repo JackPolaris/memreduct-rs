@@ -1,11 +1,16 @@
 //! Automatic updater backed by `tauri-plugin-updater`.
 //!
-//! The update source and signing public key are configured at runtime from the
-//! app config (`update_repo` / `update_pubkey`), so the app does not assume any
-//! specific repository and reports clearly when the update source is missing.
+//! The update source is hardcoded to the official GitHub repository
+//! (`JackPolaris/memreduct-rs`); the UI only exposes a single "Check for
+//! updates" button and the current version — no repo/key configuration.
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_updater::{UpdaterBuilder, UpdaterExt};
+
+use crate::AppState;
+
+/// Official release repository (hardcoded, owner/repo).
+const UPDATE_REPO: &str = "JackPolaris/memreduct-rs";
 
 /// Serialisable update info returned to the frontend.
 #[derive(Debug, serde::Serialize)]
@@ -17,59 +22,43 @@ pub struct UpdateInfo {
     pub current_version: String,
 }
 
-/// Build an updater from a GitHub `owner/repo` string. The updater queries the
-/// release asset `update-<target>.json` at `releases/latest/download`.
-fn build_updater(
-    app: &AppHandle,
-    repo: &str,
-    pubkey: &str,
-) -> Result<tauri_plugin_updater::Updater, String> {
-    let repo = repo.trim();
-    if repo.is_empty() {
-        return Err("未配置更新仓库".into());
-    }
-    // Reject anything that is not "owner/repo".
-    if !repo.contains('/') || repo.len() > 200 {
-        return Err("更新仓库格式无效（应为 owner/repo）".into());
-    }
+/// Build the updater against the hardcoded official repository.
+fn build_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
+    let endpoints = format!(
+        "https://github.com/{UPDATE_REPO}/releases/latest/download/update-{{{{target}}}}.json"
+    );
 
-    let endpoints =
-        format!("https://github.com/{repo}/releases/latest/download/update-{{{{target}}}}.json");
+    let pubkey = app
+        .state::<AppState>()
+        .config
+        .lock()
+        .map(|c| c.update_pubkey.clone())
+        .unwrap_or_default();
 
     let mut builder: UpdaterBuilder = app
         .updater_builder()
         .endpoints(vec![url::Url::parse(&endpoints).map_err(|e| e.to_string())?])
         .map_err(|e| e.to_string())?;
 
-    // Only set a custom pubkey when provided; otherwise fall back to the
-    // (possibly empty) pubkey from tauri.conf.json.
-    let pk = pubkey.trim();
-    if !pk.is_empty() {
-        builder = builder.pubkey(pk);
+    if !pubkey.trim().is_empty() {
+        builder = builder.pubkey(pubkey.trim().to_string());
     }
 
     builder.build().map_err(|e| e.to_string())
 }
 
-/// Check for an update against the configured repository.
+/// Check for an update against the official repository.
 #[tauri::command]
-pub async fn check_for_update(
-    app: AppHandle,
-    repo: String,
-    pubkey: String,
-) -> Result<UpdateInfo, String> {
-    let updater = build_updater(&app, &repo, &pubkey)?;
+pub async fn check_for_update(app: AppHandle) -> Result<UpdateInfo, String> {
+    let updater = build_updater(&app)?;
     match updater.check().await {
-        Ok(Some(update)) => {
-            let current = update.current_version.clone();
-            Ok(UpdateInfo {
-                available: true,
-                version: update.version.clone(),
-                date: update.date.map(|d| d.to_string()).unwrap_or_default(),
-                body: update.body.unwrap_or_default(),
-                current_version: current,
-            })
-        }
+        Ok(Some(update)) => Ok(UpdateInfo {
+            available: true,
+            version: update.version.clone(),
+            date: update.date.map(|d| d.to_string()).unwrap_or_default(),
+            body: update.body.unwrap_or_default(),
+            current_version: update.current_version.clone(),
+        }),
         Ok(None) => {
             let current = app.package_info().version.to_string();
             Ok(UpdateInfo {
@@ -84,21 +73,25 @@ pub async fn check_for_update(
     }
 }
 
-/// Download and install the latest update (shows a progress event on failure).
+/// Download the latest update and install it in the background, then exit the
+/// app so the installer can replace the binary / relaunch it.
 #[tauri::command]
-pub async fn download_and_install(
-    app: AppHandle,
-    repo: String,
-    pubkey: String,
-) -> Result<(), String> {
-    let updater = build_updater(&app, &repo, &pubkey)?;
+pub async fn download_and_install(app: AppHandle) -> Result<(), String> {
+    let updater = build_updater(&app)?;
     let update = updater.check().await.map_err(|e| e.to_string())?;
     let update = update.ok_or_else(|| "没有可用更新".to_string())?;
 
-    // Download and install. On failure we surface the error; the plugin will
-    // fall back to its own installer when the download completes.
+    // Download and run the installer. The plugin handles the download and the
+    // Windows installer (passive). Once the installer finishes, this process
+    // exits so the new version can take over.
     update
-        .download_and_install(|_chunk, _total| {}, move || {})
+        .download_and_install(
+            |_chunk, _total| {},
+            || {
+                // Installer finished: quit the app to let the new version launch.
+                app.exit(0);
+            },
+        )
         .await
         .map_err(|e| format!("下载/安装更新失败: {e}"))
 }

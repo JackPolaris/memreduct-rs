@@ -104,9 +104,8 @@ fn get_config(state: State<'_, AppState>) -> Config {
 fn save_config(app: AppHandle, state: State<'_, AppState>, config: Config) -> Result<(), String> {
     let _ = config::save(&config).map_err(|e| e.to_string());
     *state.config.lock().unwrap() = config;
-    // Live-applying config: re-register hotkey and window settings.
+    // Live-applying config: re-register the global hotkey.
     register_hotkey(&app);
-    apply_window_settings(&app);
     Ok(())
 }
 
@@ -127,6 +126,12 @@ fn get_os_info() -> OsInfo {
         is_win8_1: memory::is_win8_1_plus(),
         is_win10: memory::is_win10_plus(),
     }
+}
+
+/// Current app version (from package info).
+#[tauri::command]
+fn get_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
 }
 
 /// Show a native system notification via tauri-plugin-notification.
@@ -223,14 +228,6 @@ pub fn run_tray_action(app: &AppHandle, action: u32) {
                 let _ = w.set_focus();
             }
         }
-    }
-}
-
-/// Apply window-level config (always-on-top; start minimized handled at launch).
-fn apply_window_settings(app: &AppHandle) {
-    let cfg = app.state::<AppState>().config.lock().unwrap().clone();
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.set_always_on_top(cfg.always_on_top);
     }
 }
 
@@ -427,9 +424,6 @@ pub fn run() {
             // Start the global hotkey (default Ctrl+F1) if enabled.
             register_hotkey(&handle);
 
-            // Apply window settings (always-on-top).
-            apply_window_settings(&handle);
-
             // Spawn the periodic background loop.
             spawn_background(handle.clone());
 
@@ -454,6 +448,7 @@ pub fn run() {
             notify,
             get_autostart,
             set_autostart,
+            get_version,
             updater::check_for_update,
             updater::download_and_install
         ])
