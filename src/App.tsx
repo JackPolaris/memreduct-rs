@@ -341,7 +341,7 @@ export default function App() {
               </span>
               <span className="statusbar-note">
                 {configLocation === "portable" ? t("main.portable") : t("main.appdata")}
-                {osInfo && ` · Win ${osInfo.major}.${osInfo.minor}`} · v3.5.3
+                {osInfo && ` · Win ${osInfo.major}.${osInfo.minor}`}
               </span>
             </div>
 
