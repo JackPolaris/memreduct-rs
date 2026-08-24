@@ -54,8 +54,6 @@
     "appearance": "外觀",
     "tray": "系統匣",
     "advanced": "進階",
-    "save": "儲存",
-    "reset": "重設",
     "alwaysOnTop": "視窗置頂",
     "startMinimized": "啟動時最小化",
     "showCleanConfirmation": "清理前確認",

@@ -54,8 +54,6 @@
     "appearance": "外观",
     "tray": "托盘",
     "advanced": "高级",
-    "save": "保存",
-    "reset": "重置",
     "alwaysOnTop": "窗口置顶",
     "startMinimized": "启动时最小化",
     "showCleanConfirmation": "清理前确认",

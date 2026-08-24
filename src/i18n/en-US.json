@@ -54,8 +54,6 @@
     "appearance": "Appearance",
     "tray": "Tray",
     "advanced": "Advanced",
-    "save": "Save",
-    "reset": "Reset",
     "alwaysOnTop": "Always on top",
     "startMinimized": "Start minimized",
     "showCleanConfirmation": "Show clean confirmation",

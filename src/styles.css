@@ -166,7 +166,7 @@ body {
 /* ===== Content ===== */
 .content {
   flex: 1;
-  padding: 4px 14px 10px;
+  padding: 4px 14px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -234,7 +234,8 @@ body {
   align-items: stretch;
   border-radius: var(--radius);
   padding: 14px;
-  flex-shrink: 0;
+  flex: 1;
+  min-height: 136px;
 }
 
 .gauge-wrap {
@@ -791,19 +792,6 @@ input[type="color"] {
   color: var(--muted);
   line-height: 1.5;
   padding: 8px 4px;
-}
-
-.settings-footer {
-  display: flex;
-  gap: 10px;
-  flex-shrink: 0;
-  padding-bottom: 2px;
-}
-
-.settings-footer button {
-  flex: 1;
-  justify-content: center;
-  padding: 11px;
 }
 
 /* ===== Modal ===== */
