@@ -75,6 +75,8 @@ export const getMemoryInfo = () => invoke<MemoryInfo>("get_memory_info");
 export const isElevated = () => invoke<boolean>("is_elevated");
 export const cleanMemory = (mask: number, source: string) =>
   invoke<CleanResult>("clean_memory", { mask, source });
+export const notify = (title: string, body: string, system = true) =>
+  invoke<void>("notify", { title, body, system });
 export const getConfig = () => invoke<Config>("get_config");
 export const saveConfig = (config: Config) =>
   invoke<void>("save_config", { config });

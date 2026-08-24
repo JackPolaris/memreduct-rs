@@ -14,6 +14,7 @@
     "core:window:allow-start-dragging",
     "core:event:default",
     "core:app:default",
-    "core:image:default"
+    "core:image:default",
+    "notification:default"
   ]
 }

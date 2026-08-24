@@ -9,6 +9,7 @@ import {
   getMemoryInfo,
   getOsInfo,
   isElevated,
+  notify,
   saveConfig,
   type CleanResult,
   type Config,
@@ -33,6 +34,13 @@ import {
 } from "./icons";
 
 type Tab = "main" | "settings";
+
+interface Toast {
+  id: number;
+  title: string;
+  body: string;
+  kind: "info" | "success";
+}
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -64,6 +72,17 @@ export default function App() {
   const [lastResult, setLastResult] = useState<CleanResult | null>(null);
   const [confirmMask, setConfirmMask] = useState<number | null>(null);
   const [elevated, setElevated] = useState<boolean>(true);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [toastSeq, setToastSeq] = useState(0);
+
+  const pushToast = (title: string, body: string, kind: "info" | "success" = "info") => {
+    const id = Date.now() + toastSeq;
+    setToastSeq((s) => s + 1);
+    setToasts((ts) => [...ts, { id, title, body, kind }]);
+    setTimeout(() => {
+      setToasts((ts) => ts.filter((t) => t.id !== id));
+    }, 4200);
+  };
 
   useEffect(() => {
     getMemoryInfo().then(setInfo);
@@ -90,6 +109,9 @@ export default function App() {
     const unlistenAbout = listen("show-about", () => {
       setTab("main");
     });
+    const unlistenToast = listen<{ title: string; body: string }>("app-toast", (e) => {
+      pushToast(e.payload.title, e.payload.body, "info");
+    });
 
     const poll = setInterval(() => {
       getMemoryInfo().then(setInfo).catch(() => {});
@@ -101,6 +123,7 @@ export default function App() {
       unlistenAuto.then((fn) => fn());
       unlistenSettings.then((fn) => fn());
       unlistenAbout.then((fn) => fn());
+      unlistenToast.then((fn) => fn());
     };
   }, []);
 
@@ -112,6 +135,14 @@ export default function App() {
       const res = await cleanMemory(mask, "manual");
       setLastResult(res);
       getMemoryInfo().then(setInfo).catch(() => {});
+      // In-app toast + system notification.
+      const body = `${t("main.released")} ${formatBytes(res.freed_bytes)}${
+        res.regions.length > 0
+          ? ` · ${res.regions.length} ${t("main.regionsCount")}`
+          : ""
+      }`;
+      pushToast(t("main.cleanMemory"), body, "success");
+      notify(t("app.name"), body, config?.balloon_clean_results ?? true).catch(() => {});
     } catch (e) {
       console.error("clean failed", e);
     } finally {
@@ -314,6 +345,15 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <div className="toasts">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast ${toast.kind}`}>
+            <span className="toast-title">{toast.title}</span>
+            <span className="toast-body">{toast.body}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -396,7 +436,11 @@ function SettingsPanel({
   }, [config]);
 
   const set = <K extends keyof Config>(k: K, v: Config[K]) => {
-    setDraft((d) => ({ ...d, [k]: v }));
+    setDraft((d) => {
+      const next = { ...d, [k]: v };
+      onSave(next);
+      return next;
+    });
   };
 
   const sections: { id: Section; icon: React.ReactNode }[] = [
@@ -497,15 +541,6 @@ function SettingsPanel({
             </>
           )}
         </div>
-      </div>
-
-      <div className="settings-footer">
-        <button className="btn-ghost" onClick={() => setDraft(config)}>
-          {t("settings.reset")}
-        </button>
-        <button className="btn-primary" onClick={() => onSave(draft)}>
-          {t("settings.save")}
-        </button>
       </div>
     </div>
   );

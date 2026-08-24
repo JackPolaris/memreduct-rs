@@ -17,7 +17,6 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::tray::TrayIcon;
 use tauri::{AppHandle, Emitter, Manager, State};
-
 /// Serializable OS info.
 #[derive(Debug, serde::Serialize)]
 pub struct OsInfo {
@@ -100,6 +99,35 @@ fn get_os_info() -> OsInfo {
         is_win8_1: memory::is_win8_1_plus(),
         is_win10: memory::is_win10_plus(),
     }
+}
+
+/// Show a notification: emits an in-app toast event and (if requested) a
+/// native system notification via tauri-plugin-notification.
+#[tauri::command]
+fn notify(
+    app: AppHandle,
+    title: String,
+    body: String,
+    system: Option<bool>,
+) -> Result<(), String> {
+    // In-app floating toast.
+    let _ = app.emit(
+        "app-toast",
+        serde_json::json!({ "title": title, "body": body }),
+    );
+
+    // Native system notification (Windows toast / macOS / Linux).
+    if system.unwrap_or(true) {
+        use tauri_plugin_notification::NotificationExt;
+        let _ = app
+            .notification()
+            .builder()
+            .title(&title)
+            .body(&body)
+            .show();
+    }
+
+    Ok(())
 }
 
 fn unix_now() -> i64 {
@@ -230,6 +258,7 @@ fn spawn_background(app: AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState {
             config: Mutex::new(config::load()),
             tray: Mutex::new(None),
@@ -282,7 +311,8 @@ pub fn run() {
             get_config,
             save_config,
             get_config_location,
-            get_os_info
+            get_os_info,
+            notify
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
