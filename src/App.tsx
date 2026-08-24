@@ -8,6 +8,7 @@ import {
   getConfigLocation,
   getMemoryInfo,
   getOsInfo,
+  isElevated,
   saveConfig,
   type CleanResult,
   type Config,
@@ -48,11 +49,13 @@ export default function App() {
   const [cleaning, setCleaning] = useState(false);
   const [lastResult, setLastResult] = useState<CleanResult | null>(null);
   const [confirmMask, setConfirmMask] = useState<number | null>(null);
+  const [elevated, setElevated] = useState<boolean>(true);
 
   useEffect(() => {
     getMemoryInfo().then(setInfo);
     getOsInfo().then(setOsInfo);
     getConfigLocation().then(setConfigLocation);
+    isElevated().then(setElevated).catch(() => setElevated(false));
     getConfig().then((c) => {
       setConfig(c);
       setSelectedMask(c.reduct_mask);
@@ -210,6 +213,12 @@ export default function App() {
               {t("main.configLocation")}:{" "}
               {configLocation === "portable" ? t("main.portable") : t("main.appdata")}
               {osInfo && ` · Win ${osInfo.major}.${osInfo.minor}`} · v3.5.3
+              {!elevated && (
+                <>
+                  <br />
+                  <span className="note-danger">{t("main.notElevated")}</span>
+                </>
+              )}
             </footer>
           </>
         ) : config ? (
@@ -299,7 +308,7 @@ function SettingsPanel({
 
   return (
     <div className="settings">
-      <div className="settings-nav">
+      <div className="settings-tabs">
         {sections.map((s) => (
           <button
             key={s}

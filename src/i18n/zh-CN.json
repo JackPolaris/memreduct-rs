@@ -33,7 +33,8 @@
     "configLocation": "配置",
     "portable": "便携模式",
     "appdata": "应用数据",
-    "of": "共"
+    "of": "共",
+    "notElevated": "未获取管理员权限，清理可能无效"
   },
   "confirm": {
     "title": "确认清理以下区域?",

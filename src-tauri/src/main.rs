@@ -2,5 +2,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    // Mem Reduct requires administrator rights for its NT memory operations;
+    // request elevation before starting the app (mirrors the original).
+    mem_reduct_lib::elevation::ensure_elevated_or_exit();
     mem_reduct_lib::run()
 }

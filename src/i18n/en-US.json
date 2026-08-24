@@ -33,7 +33,8 @@
     "configLocation": "Config",
     "portable": "portable",
     "appdata": "appdata",
-    "of": "of"
+    "of": "of",
+    "notElevated": "No administrator rights - cleaning may be ineffective"
   },
   "confirm": {
     "title": "Confirm cleaning these regions?",

@@ -72,6 +72,7 @@ export interface OsInfo {
 }
 
 export const getMemoryInfo = () => invoke<MemoryInfo>("get_memory_info");
+export const isElevated = () => invoke<boolean>("is_elevated");
 export const cleanMemory = (mask: number, source: string) =>
   invoke<CleanResult>("clean_memory", { mask, source });
 export const getConfig = () => invoke<Config>("get_config");

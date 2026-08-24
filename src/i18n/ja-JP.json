@@ -33,7 +33,8 @@
     "configLocation": "設定",
     "portable": "ポータブル",
     "appdata": "アプリデータ",
-    "of": "合計"
+    "of": "合計",
+    "notElevated": "管理者権限がありません - クリーンが無効になる場合があります"
   },
   "confirm": {
     "title": "以下の領域をクリーンしますか?",

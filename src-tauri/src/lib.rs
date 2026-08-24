@@ -5,6 +5,7 @@
 
 pub mod cmdline;
 pub mod config;
+pub mod elevation;
 pub mod hotkey;
 pub mod memory;
 pub mod ntapi;
@@ -35,6 +36,12 @@ struct AppState {
 #[tauri::command]
 fn get_memory_info() -> MemoryInfo {
     memory::get_memory_info()
+}
+
+/// Whether the app is running elevated (affects cleanup effectiveness).
+#[tauri::command]
+fn is_elevated() -> bool {
+    elevation::is_elevated()
 }
 
 #[tauri::command]
@@ -256,6 +263,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_memory_info,
+            is_elevated,
             clean_memory,
             get_config,
             save_config,
