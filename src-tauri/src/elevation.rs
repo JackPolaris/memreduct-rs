@@ -33,59 +33,6 @@ pub fn is_elevated() -> bool {
     }
 }
 
-/// Relaunch the current executable with the `runas` verb (UAC prompt).
-/// Returns true if the ShellExecute call succeeded.
-pub fn relaunch_as_admin() -> bool {
-    use windows::core::PCWSTR;
-    use windows::Win32::UI::Shell::ShellExecuteW;
-    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-
-    let exe = match std::env::current_exe() {
-        Ok(e) => e,
-        Err(_) => return false,
-    };
-    let exe_wide: Vec<u16> = exe
-        .to_string_lossy()
-        .encode_utf16()
-        .chain(core::iter::once(0))
-        .collect();
-
-    // static NUL-terminated "runas" wide string.
-    static RUNAS: [u16; 6] = [0x72, 0x75, 0x6e, 0x61, 0x73, 0x00]; // "runas\0"
-
-    unsafe {
-        let result = ShellExecuteW(
-            None,
-            PCWSTR(RUNAS.as_ptr()),
-            PCWSTR(exe_wide.as_ptr()),
-            PCWSTR::null(),
-            PCWSTR::null(),
-            SW_SHOWNORMAL,
-        );
-        result.0 as isize > 32
-    }
-}
-
-/// Startup elevation check: if not elevated, relaunch via UAC and exit.
-pub fn ensure_elevated_or_exit() {
-    // Skip in debug builds (e.g. `tauri dev`) — the self-relaunch would kill
-    // the dev session and appear as a "flash crash". Release builds still
-    // request elevation as before.
-    if cfg!(debug_assertions) {
-        return;
-    }
-    // Manual override for testing (MEMREDUCT_NO_ELEVATE=1).
-    if std::env::var("MEMREDUCT_NO_ELEVATE").is_ok() {
-        return;
-    }
-    if is_elevated() {
-        return;
-    }
-    if relaunch_as_admin() {
-        std::process::exit(0);
-    }
-}
-
 /// Enable the privileges required by the NT memory calls (mirrors the
 /// original `_r_sys_setprocessprivilege` list used at startup):
 ///

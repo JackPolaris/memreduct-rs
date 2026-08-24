@@ -2,11 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    // Mem Reduct requires administrator rights for its NT memory operations;
-    // request elevation before starting the app (mirrors the original).
-    mem_reduct_lib::elevation::ensure_elevated_or_exit();
-    // Enable the privileges needed by the NT memory calls (as the original
-    // does in _app_initialize).
+    // Administrator rights are requested by the embedded Windows manifest
+    // (requireAdministrator) for release builds, so the UAC prompt appears up
+    // front with no flash-and-exit. Debug builds run as a normal process.
     mem_reduct_lib::elevation::enable_memory_privileges();
     mem_reduct_lib::run()
 }
