@@ -1,0 +1,380 @@
+:root {
+  --bg: #f2f4f7;
+  --surface: #ffffff;
+  --surface2: #f7f9fb;
+  --text: #1b2430;
+  --muted: #8a94a3;
+  --border: #e3e8ee;
+  --accent: #008040;
+  --accent2: #006030;
+  --danger: #ec1c24;
+  --warning: #ff8040;
+  --shadow: 0 6px 20px rgba(20, 40, 60, 0.08);
+  --ring-bg: #e9edf2;
+}
+
+.app.dark {
+  --bg: #14181d;
+  --surface: #1d232b;
+  --surface2: #262d37;
+  --text: #e6ebf1;
+  --muted: #7b8794;
+  --border: #2f3742;
+  --accent: #2fb469;
+  --accent2: #1f8d50;
+  --danger: #ff5252;
+  --warning: #ff9a4d;
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  --ring-bg: #2a323d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-icon {
+  color: var(--accent);
+  font-size: 18px;
+}
+
+.brand-name {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.tabs button,
+.settings-nav button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.tabs button.active,
+.settings-nav button.active {
+  background: var(--surface2);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.content {
+  flex: 1;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: var(--shadow);
+}
+
+.ring {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+
+.ring-inner {
+  width: 118px;
+  height: 118px;
+  border-radius: 50%;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring-value {
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.ring-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.hero-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.metric {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-title {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.metric-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.bar {
+  height: 6px;
+  background: var(--ring-bg);
+  border-radius: 3px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.panel-title {
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.region-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.region {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.region input {
+  margin-top: 2px;
+}
+
+.region-body {
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+}
+
+.region-note {
+  font-size: 11px;
+  color: var(--warning);
+}
+
+.region-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.clean-btn {
+  border: none;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 14px;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.clean-btn:disabled {
+  opacity: 0.6;
+}
+
+.clean-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.result {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.footnote {
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+button.ghost,
+button.primary {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+}
+
+/* Settings */
+.settings {
+  display: flex;
+  gap: 14px;
+  flex: 1;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 110px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 8px;
+}
+
+.settings-nav button {
+  text-align: left;
+}
+
+.settings-body {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.toggle input {
+  width: 36px;
+  height: 20px;
+}
+
+.slider {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.slider input[type="range"] {
+  width: 100%;
+}
+
+select {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+input[type="color"] {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  width: 44px;
+  height: 30px;
+  padding: 2px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.settings-footer {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
