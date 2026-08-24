@@ -63,6 +63,8 @@
     "showCleanConfirmation": "清理前確認",
     "checkUpdates": "檢查更新",
     "checkNow": "檢查更新",
+    "checking": "檢查中…",
+    "downloading": "下載中…",
     "installNow": "下載安裝",
     "updateInstalling": "發現新版本，正在背景下載並安裝…",
     "autoCheck": "啟動時自動檢查更新",

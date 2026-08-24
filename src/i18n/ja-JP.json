@@ -63,6 +63,8 @@
     "showCleanConfirmation": "クリーン前に確認",
     "checkUpdates": "更新を確認",
     "checkNow": "更新を確認",
+    "checking": "確認中…",
+    "downloading": "ダウンロード中…",
     "installNow": "ダウンロード・インストール",
     "updateInstalling": "新しいバージョンが見つかりました。バックグラウンドでダウンロード・インストール中…",
     "autoCheck": "起動時に更新をチェック",

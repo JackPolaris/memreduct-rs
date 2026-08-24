@@ -63,6 +63,8 @@
     "showCleanConfirmation": "Show clean confirmation",
     "checkUpdates": "Check for updates",
     "checkNow": "Check for updates",
+    "checking": "Checking…",
+    "downloading": "Downloading…",
     "installNow": "Download & install",
     "updateInstalling": "New version found, downloading & installing in the background…",
     "autoCheck": "Check for updates on startup",

@@ -494,6 +494,7 @@ function SettingsPanel({
   const [draft, setDraft] = useState<Config>(config);
   const [section, setSection] = useState<Section>("general");
   const [autostart, setAutostartState] = useState<boolean>(false);
+  const [updatePhase, setUpdatePhase] = useState<"idle" | "checking" | "downloading">("idle");
 
   useEffect(() => {
     setDraft(config);
@@ -556,16 +557,23 @@ function SettingsPanel({
   // Single "Check for updates" flow: check → if a new version exists, download
   // and install it in the background, then the app restarts automatically.
   const runUpdateCheck = async () => {
+    if (updatePhase !== "idle") return;
+    setUpdatePhase("checking");
     try {
       const r = await checkForUpdate();
       if (r.available) {
+        setUpdatePhase("downloading");
         notify(t("settings.updateInstalling"), `v${r.version}`, true).catch(() => {});
         await downloadAndInstall();
+        // The app restarts/exit after install; if we return here, reset anyway.
+        setUpdatePhase("idle");
       } else {
         notify(t("settings.updateNone"), `${t("settings.version")} ${r.current_version}`, true).catch(() => {});
+        setUpdatePhase("idle");
       }
     } catch (e) {
       notify(t("settings.updateError"), String(e), true).catch(() => {});
+      setUpdatePhase("idle");
     }
   };
 
@@ -708,8 +716,17 @@ function SettingsPanel({
                   <span className="icon"><IconSparkles size={15} /></span>
                   {t("settings.checkUpdates")}
                 </span>
-                <button className="chipbtn" onClick={() => runUpdateCheck()}>
-                  {t("settings.checkNow")}
+                <button
+                  className="chipbtn"
+                  onClick={() => runUpdateCheck()}
+                  disabled={updatePhase !== "idle"}
+                >
+                  {updatePhase === "checking" && <span className="spinner" />}
+                  {updatePhase === "checking"
+                    ? t("settings.checking")
+                    : updatePhase === "downloading"
+                      ? t("settings.downloading")
+                      : t("settings.checkNow")}
                 </button>
               </div>
               <div className="setrow">
