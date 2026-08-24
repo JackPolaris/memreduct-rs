@@ -120,7 +120,7 @@ impl Default for Config {
             log_clean_results: false,
 
             update_repo: "JackPolaris/memreduct-rs".into(),
-            update_pubkey: String::new(),
+            update_pubkey: "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMyRkNDQ0ZDOUQyNzY4RDUKUldUVmFDZWQvTXo4TXZtODdQQUNBTTk4WXFQK1pLZkZIWVk0aGJkSStRbnBWQUo1d21uSTRQOEcK".into(),
 
             statistic_last_reduct: 0,
         }

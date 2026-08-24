@@ -1,0 +1,11 @@
+{
+  "version": "3.5.3",
+  "notes": "Mem Reduct 3.5.3\n\n- 托盘圆角边框修复\n- 通知条顶部居中磨砂玻璃胶囊\n- 开机自启体验优化\n- 检查更新加载反馈",
+  "pub_date": "2026-08-24T17:42:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TW1FaXVacTZEdHJOUE5FRE5TMTRBbWQzWlNFalNQY0dJTXVoY0xnMmdXWFRnb2ZBR1M5bXZobFNtYSt4VkMyOFp1M0tDeVZ0MmZ2NEdiUWtwSmFrWHdrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NTkzMzQ5CWZpbGU6TWVtIFJlZHVjdF8zLjUuM194NjQtc2V0dXAuZXhlCjV4WGVFY3QwRVRaRkdCTTNaRmxZOC9uais3Z3RqSTBnOTBWU0JRZnlmQUcvQkVKVXNMd2VydWVMREQ3bUZzZFRzU2FSUzRaSE9aMGVXN2Y0TlpxNkFRPT0K",
+      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.3/Mem.Reduct_3.5.3_x64-setup.exe"
+    }
+  }
+}
