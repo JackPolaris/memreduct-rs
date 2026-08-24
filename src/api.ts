@@ -77,6 +77,24 @@ export const cleanMemory = (mask: number, source: string) =>
   invoke<CleanResult>("clean_memory", { mask, source });
 export const notify = (title: string, body: string, system = true) =>
   invoke<void>("notify", { title, body, system });
+
+// Check the latest release from GitHub (uses the public API directly).
+export async function checkForUpdates(): Promise<{ latest: string; current: string; hasUpdate: boolean }> {
+  const current = "3.5.3";
+  try {
+    const resp = await fetch(
+      "https://api.github.com/repos/henrypp/memreduct/releases/latest",
+      { headers: { Accept: "application/vnd.github+json" } }
+    );
+    if (!resp.ok) throw new Error(String(resp.status));
+    const data = await resp.json();
+    const latest = String(data.tag_name || "").replace(/^v\.?|^V\.?/, "");
+    const hasUpdate = latest !== "" && latest !== current;
+    return { latest, current, hasUpdate };
+  } catch (e) {
+    return { latest: "", current, hasUpdate: false };
+  }
+}
 export const getConfig = () => invoke<Config>("get_config");
 export const saveConfig = (config: Config) =>
   invoke<void>("save_config", { config });

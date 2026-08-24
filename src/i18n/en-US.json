@@ -58,6 +58,10 @@
     "startMinimized": "Start minimized",
     "showCleanConfirmation": "Show clean confirmation",
     "checkUpdates": "Check updates",
+    "checkNow": "Check",
+    "updateAvailable": "New version available",
+    "updateNone": "You're up to date",
+    "version": "Version",
     "darkTheme": "Dark theme",
     "autoReduct": "Auto-reduct by usage",
     "autoReductThreshold": "Auto-reduct threshold (%)",
@@ -81,7 +85,8 @@
     "showCleanResult": "Show clean result balloon",
     "logCleanResults": "Log clean results",
     "hotkeyClean": "Global clean hotkey",
-    "hotkeyHint": "Default hotkey: Ctrl+F1 (change in app)"
+    "hotkeyHint": "Default hotkey: Ctrl+F1 (change in app)",
+    "hotkeyCombo": "Hotkey combo"
   },
   "regions": {
     "workingSet": "Working Set",

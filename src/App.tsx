@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import i18n from "./i18n";
 import {
+  checkForUpdates,
   cleanMemory,
   getConfig,
   getConfigLocation,
@@ -474,7 +475,25 @@ function SettingsPanel({
               <Toggle label={t("settings.alwaysOnTop")} icon={<IconSettings size={15} />} checked={draft.always_on_top} onChange={(v) => set("always_on_top", v)} />
               <Toggle label={t("settings.startMinimized")} icon={<IconSettings size={15} />} checked={draft.start_minimized} onChange={(v) => set("start_minimized", v)} />
               <Toggle label={t("settings.showCleanConfirmation")} icon={<IconSparkles size={15} />} checked={draft.show_reduct_confirmation} onChange={(v) => set("show_reduct_confirmation", v)} />
-              <Toggle label={t("settings.checkUpdates")} icon={<IconSparkles size={15} />} checked={draft.check_updates} onChange={(v) => set("check_updates", v)} />
+              <div className="setrow">
+                <span className="setrow-label">
+                  <span className="icon"><IconSparkles size={15} /></span>
+                  {t("settings.checkUpdates")}
+                </span>
+                <button
+                  className="chipbtn"
+                  onClick={async () => {
+                    const r = await checkForUpdates();
+                    if (r.hasUpdate) {
+                      notify(t("settings.updateAvailable"), `v${r.latest}`, true).catch(() => {});
+                    } else {
+                      notify(t("settings.updateNone"), `${t("settings.version")} ${r.current}`, true).catch(() => {});
+                    }
+                  }}
+                >
+                  {t("settings.checkNow")}
+                </button>
+              </div>
               <Toggle label={t("settings.darkTheme")} icon={<IconPalette size={15} />} checked={draft.use_dark_theme} onChange={(v) => set("use_dark_theme", v)} />
               <div className="setrow">
                 <span className="setrow-label">
@@ -537,7 +556,12 @@ function SettingsPanel({
               <Toggle label={t("settings.showCleanResult")} icon={<IconSparkles size={15} />} checked={draft.balloon_clean_results} onChange={(v) => set("balloon_clean_results", v)} />
               <Toggle label={t("settings.logCleanResults")} icon={<IconDrive size={15} />} checked={draft.log_clean_results} onChange={(v) => set("log_clean_results", v)} />
               <Toggle label={t("settings.hotkeyClean")} icon={<IconKeyboard size={15} />} checked={draft.hotkey_clean_enable} onChange={(v) => set("hotkey_clean_enable", v)} />
-              <div className="hint">{t("settings.hotkeyHint")}</div>
+              {draft.hotkey_clean_enable && (
+                <div className="setrow">
+                  <span className="setrow-label">{t("settings.hotkeyCombo")}</span>
+                  <HotkeyRecorder value={draft.hotkey_clean} onChange={(v) => set("hotkey_clean", v)} />
+                </div>
+              )}
             </>
           )}
         </div>
@@ -665,3 +689,79 @@ function parseHex(hex: string): number {
   const b = parseInt(h.slice(4, 6), 16);
   return (r << 16) | (g << 8) | b;
 }
+
+// ---- Hotkey recorder ----
+const MOD_ALT = 1;
+const MOD_CTRL = 2;
+const MOD_SHIFT = 4;
+const MOD_WIN = 8;
+
+function hotkeyLabel(value: number): string {
+  const mods = (value >> 16) & 0xffff;
+  const vk = value & 0xffff;
+  const parts: string[] = [];
+  if (mods & MOD_CTRL) parts.push("Ctrl");
+  if (mods & MOD_ALT) parts.push("Alt");
+  if (mods & MOD_SHIFT) parts.push("Shift");
+  if (mods & MOD_WIN) parts.push("Win");
+  // Virtual-key → readable name for common keys.
+  if (vk >= 112 && vk <= 123) parts.push(`F${vk - 111}`);
+  else if (vk >= 65 && vk <= 90) parts.push(String.fromCharCode(vk));
+  else if (vk >= 48 && vk <= 57) parts.push(String.fromCharCode(vk));
+  else if (vk === 32) parts.push("Space");
+  else if (vk === 13) parts.push("Enter");
+  else if (vk === 9) parts.push("Tab");
+  else if (vk === 27) parts.push("Esc");
+  else if (vk === 8) parts.push("Backspace");
+  else if (vk === 46) parts.push("Delete");
+  else if (vk === 37) parts.push("Left");
+  else if (vk === 38) parts.push("Up");
+  else if (vk === 39) parts.push("Right");
+  else if (vk === 40) parts.push("Down");
+  else parts.push(`VK${vk}`);
+  return parts.join(" + ");
+}
+
+function HotkeyRecorder({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const [recording, setRecording] = useState(false);
+
+  const start = () => setRecording(true);
+
+  useEffect(() => {
+    if (!recording) return;
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      let mods = 0;
+      if (e.ctrlKey) mods |= MOD_CTRL;
+      if (e.altKey) mods |= MOD_ALT;
+      if (e.shiftKey) mods |= MOD_SHIFT;
+      if (e.metaKey) mods |= MOD_WIN;
+      const vk = e.keyCode || 0;
+      // Only record real keys (ignore pure modifier presses).
+      if (vk && vk !== 16 && vk !== 17 && vk !== 18 && vk !== 91 && vk !== 92) {
+        onChange(((mods & 0xffff) << 16) | (vk & 0xffff));
+      }
+      setRecording(false);
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [recording, onChange]);
+
+  return (
+    <button
+      className={`hotkey-btn ${recording ? "recording" : ""}`}
+      onClick={start}
+      type="button"
+    >
+      {recording ? "按下组合键…" : hotkeyLabel(value)}
+    </button>
+  );
+}
+

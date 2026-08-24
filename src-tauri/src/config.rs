@@ -84,7 +84,8 @@ impl Default for Config {
             reduct_mask: crate::memory::mask::DEFAULT,
 
             hotkey_clean_enable: false,
-            hotkey_clean: 0x71, // VK_F1
+            // encoded as (modifiers << 16) | vk ; default Ctrl (0x0002) + F1 (0x71)
+            hotkey_clean: (0x0002u32 << 16) | 0x71,
 
             tray_use_transparency: false,
             tray_show_border: false,
@@ -146,11 +147,16 @@ pub fn config_location() -> ConfigLocation {
     }
 }
 
-fn config_path() -> PathBuf {
+/// Directory where the config (and log) lives.
+pub fn data_dir() -> PathBuf {
     match config_location() {
-        ConfigLocation::Portable => executable_dir().join(PORTABLE_MARKER),
-        ConfigLocation::AppData => appdata_dir().join("config.json"),
+        ConfigLocation::Portable => executable_dir(),
+        ConfigLocation::AppData => appdata_dir(),
     }
+}
+
+fn config_path() -> PathBuf {
+    data_dir().join("config.json")
 }
 
 /// Load config from disk; returns defaults if missing or malformed.
@@ -178,6 +184,22 @@ pub fn color_to_hex(rgb: u32) -> String {
     let g = (rgb >> 8) & 0xFF;
     let b = rgb & 0xFF;
     format!("#{:02x}{:02x}{:02x}", r, g, b)
+}
+
+/// Append a line to the cleanup log file (best-effort).
+pub fn log_cleanup(line: &str) {
+    use std::io::Write;
+    let path = data_dir().join("memreduct.log");
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(f, "[{}] {line}", unix_now_str());
+    }
+}
+
+fn unix_now_str() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 #[cfg(test)]

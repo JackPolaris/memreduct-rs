@@ -58,6 +58,10 @@
     "startMinimized": "啟動時最小化",
     "showCleanConfirmation": "清理前確認",
     "checkUpdates": "檢查更新",
+    "checkNow": "檢查",
+    "updateAvailable": "發現新版本",
+    "updateNone": "目前是最新版本",
+    "version": "版本",
     "darkTheme": "深色主題",
     "autoReduct": "按使用率自動清理",
     "autoReductThreshold": "自動清理臨界值(%)",
@@ -81,7 +85,8 @@
     "showCleanResult": "顯示清理結果氣泡",
     "logCleanResults": "記錄清理結果",
     "hotkeyClean": "全域清理熱鍵",
-    "hotkeyHint": "預設熱鍵：Ctrl+F1（可在應用程式內修改）"
+    "hotkeyHint": "預設熱鍵：Ctrl+F1（可在應用程式內修改）",
+    "hotkeyCombo": "熱鍵組合"
   },
   "regions": {
     "workingSet": "工作集",

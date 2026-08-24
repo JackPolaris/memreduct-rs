@@ -55,16 +55,29 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
         .on_menu_event(move |_app, event| handle_menu(&app_handle, event.id().as_ref()))
         .on_tray_icon_event(|tray, event| match event {
             TrayIconEvent::DoubleClick { button, .. } if button == tauri::tray::MouseButton::Left => {
-                // Double-click left → clean memory (the classic Mem Reduct action).
-                crate::clean_from_tray(tray.app_handle());
+                let app = tray.app_handle();
+                let action = app
+                    .state::<crate::AppState>()
+                    .config
+                    .lock()
+                    .unwrap()
+                    .tray_action_dc;
+                crate::run_tray_action(app, action);
             }
             TrayIconEvent::Click { button, .. } if button == tauri::tray::MouseButton::Left => {
-                // Single left click → show window.
-                if let Some(w) = tray.app_handle().get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.unminimize();
-                    let _ = w.set_focus();
-                }
+                let app = tray.app_handle();
+                // Single left click → show window (matches original default).
+                crate::run_tray_action(app, 0);
+            }
+            TrayIconEvent::Click { button, .. } if button == tauri::tray::MouseButton::Middle => {
+                let app = tray.app_handle();
+                let action = app
+                    .state::<crate::AppState>()
+                    .config
+                    .lock()
+                    .unwrap()
+                    .tray_action_mc;
+                crate::run_tray_action(app, action);
             }
             _ => {}
         })

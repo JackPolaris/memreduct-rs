@@ -10,10 +10,12 @@ pub mod hotkey;
 pub mod memory;
 pub mod ntapi;
 pub mod tray;
+pub mod trayicon;
 
 use config::Config;
 use memory::{CleanResult, MemoryInfo};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::tray::TrayIcon;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -27,9 +29,10 @@ pub struct OsInfo {
 }
 
 /// App state kept for the lifetime of the process.
-struct AppState {
-    config: Mutex<Config>,
+pub struct AppState {
+    pub config: Mutex<Config>,
     tray: Mutex<Option<TrayIcon>>,
+    hotkey_stop: Mutex<Option<Arc<AtomicBool>>>,
 }
 
 #[tauri::command]
@@ -59,6 +62,11 @@ fn clean_memory(
 
     let result = memory::clean_memory(mask, allow_standby, is_autoclean);
 
+    // Log cleanup result if enabled.
+    if cfg.log_clean_results {
+        config::log_cleanup(&format!("freed {} bytes, regions {:?}", result.freed_bytes, result.regions));
+    }
+
     // Update statistic timestamp.
     let mut guard = state.config.lock().unwrap();
     guard.statistic_last_reduct = unix_now();
@@ -76,9 +84,12 @@ fn get_config(state: State<'_, AppState>) -> Config {
 }
 
 #[tauri::command]
-fn save_config(state: State<'_, AppState>, config: Config) -> Result<(), String> {
+fn save_config(app: AppHandle, state: State<'_, AppState>, config: Config) -> Result<(), String> {
     let _ = config::save(&config).map_err(|e| e.to_string());
     *state.config.lock().unwrap() = config;
+    // Live-applying config: re-register hotkey and window settings.
+    register_hotkey(&app);
+    apply_window_settings(&app);
     Ok(())
 }
 
@@ -148,6 +159,53 @@ pub fn clean_from_tray(app: &AppHandle) {
     let allow_standby = cfg_allow_standby(app);
     let _ = memory::clean_memory(mask, allow_standby, false);
     let _ = app.emit("memory-update", memory::get_memory_info());
+}
+
+/// Execute a tray action: 0 = show window, 1 = clean memory.
+pub fn run_tray_action(app: &AppHandle, action: u32) {
+    match action {
+        1 => clean_from_tray(app),
+        _ => {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }
+    }
+}
+
+/// Apply window-level config (always-on-top; start minimized handled at launch).
+fn apply_window_settings(app: &AppHandle) {
+    let cfg = app.state::<AppState>().config.lock().unwrap().clone();
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_always_on_top(cfg.always_on_top);
+    }
+}
+
+/// (Re)register the global clean hotkey from the current config.
+fn register_hotkey(app: &AppHandle) {    let state = app.state::<AppState>();
+    let cfg = state.config.lock().unwrap().clone();
+
+    // Stop any existing hotkey thread.
+    {
+        let mut guard = state.hotkey_stop.lock().unwrap();
+        if let Some(stop) = guard.take() {
+            stop.store(true, Ordering::Relaxed);
+        }
+    }
+
+    if cfg.hotkey_clean_enable {
+        let (mods, vk) = hotkey::decode(cfg.hotkey_clean);
+        let stop = Arc::new(AtomicBool::new(false));
+        *state.hotkey_stop.lock().unwrap() = Some(stop.clone());
+        let app = app.clone();
+        hotkey::run_hotkey_loop(1, mods, vk, stop, move || {
+            let h = app.clone();
+            let mask = h.state::<AppState>().config.lock().unwrap().reduct_mask;
+            let _ = memory::clean_memory(mask, cfg_allow_standby(&h), false);
+        });
+    }
 }
 
 /// Decide whether auto-clean should run based on the current usage percent,
@@ -222,6 +280,42 @@ fn spawn_background(app: AppHandle) {
                         info.physical_memory.used_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
                         info.physical_memory.total_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
                     )));
+
+                    // Render the percent into the tray icon with the configured
+                    // colours (background switches to warning/danger on threshold).
+                    let danger = cfg.tray_level_danger;
+                    let warning = cfg.tray_level_warning;
+                    let bg = if pct >= danger {
+                        trayicon::unpack_color(cfg.tray_color_danger)
+                    } else if pct >= warning {
+                        if cfg.tray_change_bg {
+                            trayicon::unpack_color(cfg.tray_color_warning)
+                        } else {
+                            trayicon::unpack_color(cfg.tray_color_bg)
+                        }
+                    } else {
+                        trayicon::unpack_color(cfg.tray_color_bg)
+                    };
+                    let fg = if cfg.tray_change_bg {
+                        trayicon::unpack_color(cfg.tray_color_text)
+                    } else if pct >= danger {
+                        trayicon::unpack_color(cfg.tray_color_danger)
+                    } else if pct >= warning {
+                        trayicon::unpack_color(cfg.tray_color_warning)
+                    } else {
+                        trayicon::unpack_color(cfg.tray_color_text)
+                    };
+
+                    let style = trayicon::TrayIconStyle {
+                        bg,
+                        fg,
+                        transparent: cfg.tray_use_transparency,
+                        border: cfg.tray_show_border,
+                        round: cfg.tray_round_corners,
+                    };
+                    let rgba = trayicon::render(pct, &style);
+                    let icon = tauri::image::Image::new_owned(rgba, 32, 32);
+                    let _ = tray.set_icon(Some(icon));
                 }
             }
 
@@ -262,6 +356,7 @@ pub fn run() {
         .manage(AppState {
             config: Mutex::new(config::load()),
             tray: Mutex::new(None),
+            hotkey_stop: Mutex::new(None),
         })
         .setup(|app| {
             // Create the tray icon and store it in state for background updates.
@@ -284,18 +379,17 @@ pub fn run() {
                 cmdline::CommandLineAction::None => {}
             }
 
-            // Start the global hotkey (Ctrl+F1 default) if enabled.
+            // Start the global hotkey (default Ctrl+F1) if enabled.
+            register_hotkey(&handle);
+
+            // Apply window settings (always-on-top / start minimized).
+            apply_window_settings(&handle);
             {
-                let state = handle.state::<AppState>();
-                let cfg = state.config.lock().unwrap().clone();
-                if cfg.hotkey_clean_enable {
-                    // MOD_CONTROL (2) | DEFAULT F1 (0x71)
-                    let hotkey_handle = handle.clone();
-                    hotkey::run_hotkey_loop(1, 0x0002, cfg.hotkey_clean, move || {
-                        let h = hotkey_handle.clone();
-                        let mask = h.state::<AppState>().config.lock().unwrap().reduct_mask;
-                        let _ = memory::clean_memory(mask, cfg_allow_standby(&h), false);
-                    });
+                let cfg = handle.state::<AppState>().config.lock().unwrap().clone();
+                if cfg.start_minimized {
+                    if let Some(w) = handle.get_webview_window("main") {
+                        let _ = w.hide();
+                    }
                 }
             }
 

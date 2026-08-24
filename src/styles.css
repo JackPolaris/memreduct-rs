@@ -794,6 +794,37 @@ input[type="color"] {
   padding: 8px 4px;
 }
 
+.hotkey-btn {
+  border: 1px solid var(--border-strong);
+  background: var(--surface-solid);
+  color: var(--text);
+  padding: 7px 14px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition: all 0.15s ease;
+  min-width: 110px;
+  text-align: center;
+}
+
+.hotkey-btn:hover {
+  border-color: var(--accent);
+}
+
+.hotkey-btn.recording {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
+  50% { box-shadow: 0 0 0 5px transparent; }
+}
+
 /* ===== Modal ===== */
 .modal-overlay {
   position: fixed;
