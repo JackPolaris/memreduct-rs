@@ -70,6 +70,7 @@ function colorForPercent(p: number): string {
 export default function App() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>("main");
+  const [settingsSection, setSettingsSection] = useState<Section>("general");
   const [info, setInfo] = useState<MemoryInfo | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
   const [osInfo, setOsInfo] = useState<OsInfo | null>(null);
@@ -158,7 +159,8 @@ export default function App() {
       setTab("settings");
     });
     const unlistenAbout = listen("show-about", () => {
-      setTab("main");
+      setTab("settings");
+      setSettingsSection("about");
     });
     const unlistenToast = listen<{ title: string; body: string }>("app-toast", (e) => {
       pushToast(e.payload.title, e.payload.body, "info");
@@ -371,7 +373,7 @@ export default function App() {
         </div>
         <div style={{ display: tab === "settings" ? "flex" : "none", flex: 1, minHeight: 0 }}>
           {config ? (
-            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} />
+            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} section={settingsSection} onSectionChange={setSettingsSection} onToast={pushToast} />
           ) : null}
         </div>
       </main>
@@ -485,14 +487,19 @@ function SettingsPanel({
   t,
   onSave,
   version,
+  section,
+  onSectionChange,
+  onToast,
 }: {
   config: Config;
   t: (k: string) => string;
   onSave: (c: Config) => void;
   version: string;
+  section: Section;
+  onSectionChange: (s: Section) => void;
+  onToast: (title: string, body: string, kind?: "info" | "success") => void;
 }) {
   const [draft, setDraft] = useState<Config>(config);
-  const [section, setSection] = useState<Section>("general");
   const [autostart, setAutostartState] = useState<boolean>(false);
   const [updatePhase, setUpdatePhase] = useState<"idle" | "checking" | "downloading">("idle");
 
@@ -563,15 +570,17 @@ function SettingsPanel({
       const r = await checkForUpdate();
       if (r.available) {
         setUpdatePhase("downloading");
+        onToast(t("settings.updateInstalling"), `v${r.version}`, "info");
         notify(t("settings.updateInstalling"), `v${r.version}`, true).catch(() => {});
         await downloadAndInstall();
-        // The app restarts/exit after install; if we return here, reset anyway.
         setUpdatePhase("idle");
       } else {
+        onToast(t("settings.updateNone"), `${t("settings.version")} ${r.current_version}`, "success");
         notify(t("settings.updateNone"), `${t("settings.version")} ${r.current_version}`, true).catch(() => {});
         setUpdatePhase("idle");
       }
     } catch (e) {
+      onToast(t("settings.updateError"), String(e), "info");
       notify(t("settings.updateError"), String(e), true).catch(() => {});
       setUpdatePhase("idle");
     }
@@ -592,7 +601,7 @@ function SettingsPanel({
           <button
             key={s.id}
             className={section === s.id ? "active" : ""}
-            onClick={() => setSection(s.id)}
+            onClick={() => onSectionChange(s.id)}
           >
             {s.icon}
             {t(`settings.${s.id}`)}

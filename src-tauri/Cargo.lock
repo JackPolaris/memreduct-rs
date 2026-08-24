@@ -2109,7 +2109,7 @@ dependencies = [
 
 [[package]]
 name = "mem-reduct"
-version = "3.5.3"
+version = "3.5.4"
 dependencies = [
  "serde",
  "serde_json",
