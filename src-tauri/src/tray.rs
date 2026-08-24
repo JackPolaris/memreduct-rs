@@ -54,7 +54,10 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
         .show_menu_on_left_click(false)
         .on_menu_event(move |_app, event| handle_menu(&app_handle, event.id().as_ref()))
         .on_tray_icon_event(|tray, event| match event {
-            TrayIconEvent::DoubleClick { button, .. } if button == tauri::tray::MouseButton::Left => {
+            TrayIconEvent::DoubleClick {
+                button: tauri::tray::MouseButton::Left,
+                ..
+            } => {
                 let app = tray.app_handle();
                 let action = app
                     .state::<crate::AppState>()
@@ -64,12 +67,18 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
                     .tray_action_dc;
                 crate::run_tray_action(app, action);
             }
-            TrayIconEvent::Click { button, .. } if button == tauri::tray::MouseButton::Left => {
+            TrayIconEvent::Click {
+                button: tauri::tray::MouseButton::Left,
+                ..
+            } => {
                 let app = tray.app_handle();
                 // Single left click → show window (matches original default).
                 crate::run_tray_action(app, 0);
             }
-            TrayIconEvent::Click { button, .. } if button == tauri::tray::MouseButton::Middle => {
+            TrayIconEvent::Click {
+                button: tauri::tray::MouseButton::Middle,
+                ..
+            } => {
                 let app = tray.app_handle();
                 let action = app
                     .state::<crate::AppState>()

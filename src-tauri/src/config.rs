@@ -198,7 +198,11 @@ pub fn color_to_hex(rgb: u32) -> String {
 pub fn log_cleanup(line: &str) {
     use std::io::Write;
     let path = data_dir().join("memreduct.log");
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
         let _ = writeln!(f, "[{}] {line}", unix_now_str());
     }
 }

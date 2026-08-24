@@ -82,11 +82,7 @@ pub fn render(percent: u32, style: &TrayIconStyle) -> Vec<u8> {
     }
 
     // Digits
-    let digits: Vec<u8> = percent
-        .to_string()
-        .bytes()
-        .map(|b| b - b'0')
-        .collect();
+    let digits: Vec<u8> = percent.to_string().bytes().map(|b| b - b'0').collect();
     let scale = match digits.len() {
         1 => 5,
         2 => 3,
@@ -102,10 +98,9 @@ pub fn render(percent: u32, style: &TrayIconStyle) -> Vec<u8> {
 
     for (di, digit) in digits.iter().enumerate() {
         let ox = start_x + di as isize * (glyph_w + gap) as isize;
-        for row in 0..5 {
-            let bits = DIGITS[*digit as usize][row];
+        for (row, row_bits) in DIGITS[*digit as usize].iter().enumerate() {
             for col in 0..3 {
-                if bits & (1 << (2 - col)) != 0 {
+                if row_bits & (1 << (2 - col)) != 0 {
                     for dy in 0..scale {
                         for dx in 0..scale {
                             let x = ox + (col * scale + dx) as isize;
@@ -129,11 +124,7 @@ pub fn render(percent: u32, style: &TrayIconStyle) -> Vec<u8> {
 
 /// Classify a pixel: inside background shape, and whether it's border.
 fn classify(x: usize, y: usize, round: bool, border: bool) -> (bool, bool) {
-    let inside = if round {
-        in_rounded(x, y)
-    } else {
-        true
-    };
+    let inside = if round { in_rounded(x, y) } else { true };
     if !inside {
         return (false, false);
     }
@@ -154,7 +145,7 @@ fn in_rounded(x: usize, y: usize) -> bool {
     let right = cx >= (SIZE as isize - r);
     let top = cy < r;
     let bottom = cy >= (SIZE as isize - r);
-    if (left && top) || (right && top) || (left && bottom) || (right && bottom) {
+    if (top || bottom) && (left || right) {
         let corner_x = if left { r } else { SIZE as isize - 1 - r };
         let corner_y = if top { r } else { SIZE as isize - 1 - r };
         let dx = cx - corner_x;

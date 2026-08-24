@@ -5,7 +5,7 @@
 //! specific repository and reports clearly when the update source is missing.
 
 use tauri::AppHandle;
-use tauri_plugin_updater::{UpdaterExt, UpdaterBuilder};
+use tauri_plugin_updater::{UpdaterBuilder, UpdaterExt};
 
 /// Serialisable update info returned to the frontend.
 #[derive(Debug, serde::Serialize)]
@@ -33,9 +33,8 @@ fn build_updater(
         return Err("更新仓库格式无效（应为 owner/repo）".into());
     }
 
-    let endpoints = format!(
-        "https://github.com/{repo}/releases/latest/download/update-{{{{target}}}}.json"
-    );
+    let endpoints =
+        format!("https://github.com/{repo}/releases/latest/download/update-{{{{target}}}}.json");
 
     let mut builder: UpdaterBuilder = app
         .updater_builder()
@@ -72,10 +71,7 @@ pub async fn check_for_update(
             })
         }
         Ok(None) => {
-            let current = app
-                .package_info()
-                .version
-                .to_string();
+            let current = app.package_info().version.to_string();
             Ok(UpdateInfo {
                 available: false,
                 version: String::new(),

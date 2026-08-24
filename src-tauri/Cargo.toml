@@ -1,9 +1,12 @@
 [package]
 name = "mem-reduct"
 version = "3.5.3"
-description = "Mem Reduct - lightweight real-time memory management application"
+description = "Mem Reduct - lightweight real-time memory management application (Tauri + React rewrite)"
 authors = ["Mem Reduct contributors"]
 edition = "2021"
+license = "GPL-3.0-only"
+repository = "https://github.com/JackPolaris/memreduct-rs"
+homepage = "https://github.com/JackPolaris/memreduct-rs"
 default-run = "mem-reduct"
 
 [lib]

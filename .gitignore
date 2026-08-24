@@ -1,4 +1,26 @@
-node_modules
-dist
-src-tauri/target
-src-tauri/gen
+# Node
+node_modules/
+dist/
+
+# Rust / Cargo
+src-tauri/target/
+src-tauri/gen/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+GITHUB_PERSONAL_ACCESS_TOKEN
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

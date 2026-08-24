@@ -65,7 +65,10 @@ fn clean_memory(
 
     // Log cleanup result if enabled.
     if cfg.log_clean_results {
-        config::log_cleanup(&format!("freed {} bytes, regions {:?}", result.freed_bytes, result.regions));
+        config::log_cleanup(&format!(
+            "freed {} bytes, regions {:?}",
+            result.freed_bytes, result.regions
+        ));
     }
 
     // Update statistic timestamp.
@@ -116,12 +119,7 @@ fn get_os_info() -> OsInfo {
 /// Show a notification: emits an in-app toast event and (if requested) a
 /// native system notification via tauri-plugin-notification.
 #[tauri::command]
-fn notify(
-    app: AppHandle,
-    title: String,
-    body: String,
-    system: Option<bool>,
-) -> Result<(), String> {
+fn notify(app: AppHandle, title: String, body: String, system: Option<bool>) -> Result<(), String> {
     // In-app floating toast.
     let _ = app.emit(
         "app-toast",
@@ -151,7 +149,11 @@ fn unix_now() -> i64 {
 
 /// Helper: read `allow_standby_list_cleanup` from the current config state.
 fn cfg_allow_standby(app: &AppHandle) -> bool {
-    app.state::<AppState>().config.lock().unwrap().allow_standby_list_cleanup
+    app.state::<AppState>()
+        .config
+        .lock()
+        .unwrap()
+        .allow_standby_list_cleanup
 }
 
 /// Clean memory triggered from the tray (double-click / menu).
@@ -185,7 +187,8 @@ fn apply_window_settings(app: &AppHandle) {
 }
 
 /// (Re)register the global clean hotkey from the current config.
-fn register_hotkey(app: &AppHandle) {    let state = app.state::<AppState>();
+fn register_hotkey(app: &AppHandle) {
+    let state = app.state::<AppState>();
     let cfg = state.config.lock().unwrap().clone();
 
     // Stop any existing hotkey thread.
@@ -235,27 +238,6 @@ fn should_autoclean(
         return true;
     }
     false
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn autoclean_threshold_logic() {
-        let now = unix_now();
-        // Threshold hit and cooldown passed -> clean.
-        assert!(should_autoclean(95, true, 90, false, 30, now - 60));
-        // Below threshold -> no clean.
-        assert!(!should_autoclean(50, true, 90, false, 30, now - 60));
-        // Disabled -> no clean.
-        assert!(!should_autoclean(95, false, 90, false, 30, now - 60));
-        // Cooldown not passed -> no clean.
-        assert!(!should_autoclean(95, true, 90, false, 30, now));
-        // Interval mode.
-        assert!(should_autoclean(10, false, 90, true, 30, now - 30 * 60));
-        assert!(!should_autoclean(10, false, 90, true, 30, now - 60));
-    }
 }
 
 /// Periodic background loop: auto-clean + refresh tray + emit info to UI.
@@ -338,14 +320,9 @@ fn spawn_background(app: AppHandle) {
                 let mut c = guard.config.lock().unwrap();
                 c.statistic_last_reduct = now;
                 drop(c);
-                let _ = memory::clean_memory(
-                    cfg.reduct_mask,
-                    cfg.allow_standby_list_cleanup,
-                    true,
-                );
+                let _ = memory::clean_memory(cfg.reduct_mask, cfg.allow_standby_list_cleanup, true);
                 let _ = app.emit("autoclean-done", ());
             }
-
         }
     });
 }
@@ -362,7 +339,7 @@ pub fn run() {
         })
         .setup(|app| {
             // Create the tray icon and store it in state for background updates.
-            if let Ok(tray) = tray::create_tray(&app.handle()) {
+            if let Ok(tray) = tray::create_tray(app.handle()) {
                 *app.state::<AppState>().tray.lock().unwrap() = Some(tray);
             }
 
@@ -376,7 +353,8 @@ pub fn run() {
                     let _ = memory::clean_memory(mask, cfg_allow_standby(&handle), false);
                 }
                 cmdline::CommandLineAction::CleanFull => {
-                    let _ = memory::clean_memory(memory::mask::ALL, cfg_allow_standby(&handle), false);
+                    let _ =
+                        memory::clean_memory(memory::mask::ALL, cfg_allow_standby(&handle), false);
                 }
                 cmdline::CommandLineAction::None => {}
             }
@@ -414,4 +392,25 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn autoclean_threshold_logic() {
+        let now = unix_now();
+        // Threshold hit and cooldown passed -> clean.
+        assert!(should_autoclean(95, true, 90, false, 30, now - 60));
+        // Below threshold -> no clean.
+        assert!(!should_autoclean(50, true, 90, false, 30, now - 60));
+        // Disabled -> no clean.
+        assert!(!should_autoclean(95, false, 90, false, 30, now - 60));
+        // Cooldown not passed -> no clean.
+        assert!(!should_autoclean(95, true, 90, false, 30, now));
+        // Interval mode.
+        assert!(should_autoclean(10, false, 90, true, 30, now - 30 * 60));
+        assert!(!should_autoclean(10, false, 90, true, 30, now - 60));
+    }
 }

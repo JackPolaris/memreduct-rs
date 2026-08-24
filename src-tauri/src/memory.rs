@@ -152,13 +152,13 @@ pub fn get_memory_info() -> MemoryInfo {
         mem_status.dwLength = core::mem::size_of::<
             windows::Win32::System::SystemInformation::MEMORYSTATUSEX,
         >() as u32;
-        if windows::Win32::System::SystemInformation::GlobalMemoryStatusEx(&mut mem_status)
-            .is_ok()
+        if windows::Win32::System::SystemInformation::GlobalMemoryStatusEx(&mut mem_status).is_ok()
         {
             info.physical_memory.total_bytes = mem_status.ullTotalPhys;
             info.physical_memory.free_bytes = mem_status.ullAvailPhys;
-            info.physical_memory.used_bytes =
-                mem_status.ullTotalPhys.saturating_sub(mem_status.ullAvailPhys);
+            info.physical_memory.used_bytes = mem_status
+                .ullTotalPhys
+                .saturating_sub(mem_status.ullAvailPhys);
             info.physical_memory.percent = mem_status.dwMemoryLoad;
             info.physical_memory.percent_f = mem_status.dwMemoryLoad as f64;
         }
@@ -337,9 +337,11 @@ pub fn clean_memory(mask: u32, allow_standby_in_auto: bool, is_autoclean: bool) 
 
         // System file cache
         if applied_mask & mask::SYSTEMFILECACHE != 0 {
-            let mut sfci: SYSTEM_FILECACHE_INFORMATION = Default::default();
-            sfci.MinimumWorkingSet = usize::MAX;
-            sfci.MaximumWorkingSet = usize::MAX;
+            let mut sfci = SYSTEM_FILECACHE_INFORMATION {
+                MinimumWorkingSet: usize::MAX,
+                MaximumWorkingSet: usize::MAX,
+                ..Default::default()
+            };
             let _ = NtSetSystemInformation(
                 SystemInformationClass::SystemFileCacheInformationEx as i32,
                 &mut sfci as *mut _ as *mut core::ffi::c_void,
@@ -397,7 +399,10 @@ pub fn clean_memory(mask: u32, allow_standby_in_auto: bool, is_autoclean: bool) 
     CleanResult {
         freed_bytes: freed,
         applied_mask,
-        regions: mask::names(applied_mask).into_iter().map(String::from).collect(),
+        regions: mask::names(applied_mask)
+            .into_iter()
+            .map(String::from)
+            .collect(),
     }
 }
 
@@ -463,12 +468,10 @@ mod tests {
         // Under autoclean disallow, freezing regions must be stripped.
         assert_eq!(result.applied_mask & mask::FREEZES, 0);
         // Region keys should reflect the applied mask (no freeze regions).
-        assert!(
-            !result
-                .regions
-                .iter()
-                .any(|n| n == &"standbyList" || n == &"modifiedList")
-        );
+        assert!(!result
+            .regions
+            .iter()
+            .any(|n| n == "standbyList" || n == "modifiedList"));
 
         // Full manual clean keeps all regions.
         let full = clean_memory(mask::ALL, true, false);
@@ -478,6 +481,9 @@ mod tests {
     #[test]
     fn os_version_is_sane() {
         let (major, minor) = os_version();
-        assert!(major >= 6, "expected at least Win7 (major>=6), got {major}.{minor}");
+        assert!(
+            major >= 6,
+            "expected at least Win7 (major>=6), got {major}.{minor}"
+        );
     }
 }
