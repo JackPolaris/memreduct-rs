@@ -5,17 +5,9 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     // --- One-shot elevated helpers (exit immediately, no UI) ---
+    // These are fired from the UAC `runas` verb; none of them open a window.
 
-    // `-clean-once <mask>`: perform one cleanup with the given mask and exit.
-    if let mem_reduct_lib::cmdline::CommandLineAction::CleanOnce(mask) =
-        mem_reduct_lib::cmdline::parse_args(&args)
-    {
-        mem_reduct_lib::elevation::enable_memory_privileges();
-        let _ = mem_reduct_lib::memory::clean_memory(mask, true, false);
-        return;
-    }
-
-    // `-ensure-autostart`: create the silent elevated logon task (one UAC lift).
+    // `-ensure-autostart`: create the silent elevated logon task.
     if args.iter().any(|a| a == "-ensure-autostart") {
         mem_reduct_lib::elevation::enable_memory_privileges();
         let _ = mem_reduct_lib::autostart::install();
@@ -29,34 +21,13 @@ fn main() {
         return;
     }
 
-    // --- Normal app launch with permanent on-demand elevation ---
+    // --- Normal app launch ---
+    //
+    // Mirrors the original Mem Reduct: the app starts WITHOUT elevation (no
+    // UAC on launch). When the user triggers a manual cleanup while un-elevated,
+    // the whole app relaunches itself through the UAC `runas` verb and the old
+    // instance exits (see `elevation::relaunch_self_as_admin`). The elevated
+    // instance then handles all subsequent cleanups with no further prompts.
     mem_reduct_lib::elevation::enable_memory_privileges();
-
-    // Skip elevation logic when already elevated (e.g. launched by the task).
-    if mem_reduct_lib::elevation::is_elevated() {
-        mem_reduct_lib::run();
-        return;
-    }
-
-    // Not elevated. Two cases:
-    // 1) The elevated task already exists → silently trigger it and exit
-    //    (no UAC, the elevated instance takes over).
-    // 2) No task yet → this is the first launch: create the task via a single
-    //    UAC prompt (unless the user previously declined).
-    if mem_reduct_lib::autostart::is_enabled() {
-        let _ = mem_reduct_lib::autostart::run_task();
-        return;
-    }
-
-    let mut cfg = mem_reduct_lib::config::load();
-    if !cfg.elevation_attempted {
-        cfg.elevation_attempted = true;
-        let _ = mem_reduct_lib::config::save(&cfg);
-        // First launch: one UAC prompt to persist elevation forever.
-        let _ = mem_reduct_lib::elevation::relaunch_with_args("-ensure-autostart");
-        return;
-    }
-
-    // User declined elevation before: run normally without admin rights.
     mem_reduct_lib::run()
 }

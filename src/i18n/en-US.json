@@ -40,7 +40,7 @@
     "portable": "portable",
     "appdata": "appdata",
     "of": "of",
-    "notElevated": "No administrator rights - cleaning may be ineffective",
+    "notElevated": "No administrator rights - cleaning may be ineffective. Enable silent autostart in Settings→General for permanent elevation",
     "none": "None",
     "regionsCount": "regions"
   },

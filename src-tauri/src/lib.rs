@@ -63,20 +63,16 @@ fn clean_memory(
     );
     let allow_standby = cfg.allow_standby_list_cleanup;
 
-    // Manual cleanup requests elevation on demand: if the process is not
-    // elevated we submit a UAC `runas` request for a one-shot helper instead of
-    // silently cleaning with limited privileges. Automatic cleanups never
-    // prompt and run in-process (mirrors the original behaviour).
-    if is_manual && !elevation::is_elevated() && elevation::relaunch_as_admin(mask) {
-        return CleanResult {
-            freed_bytes: 0,
-            applied_mask: mask,
-            regions: Vec::new(),
-            elevation_requested: true,
-        };
+    // Original Mem Reduct behaviour: a manual cleanup while un-elevated
+    // relaunches the WHOLE app through the UAC `runas` verb and exits this
+    // instance. The elevated instance takes over, so every later cleanup
+    // (manual or automatic) runs elevated with no further UAC prompts.
+    if is_manual && !elevation::is_elevated() && elevation::relaunch_self_as_admin() {
+        // Successful relaunch: the elevated instance takes over.
+        std::process::exit(0);
     }
-    // Elevation request failed/cancelled → fall through to the attempt
-    // below (limited effect without admin rights).
+    // User cancelled the UAC prompt → fall through to a limited attempt
+    // below (mirrors the original's "no privileges" path).
 
     let result = memory::clean_memory(mask, allow_standby, is_autoclean);
 
@@ -410,9 +406,15 @@ pub fn run() {
                 cmdline::CommandLineAction::CleanDefault => {
                     let state = handle.state::<AppState>();
                     let mask = state.config.lock().unwrap().reduct_mask;
+                    if !elevation::is_elevated() && elevation::relaunch_self_as_admin() {
+                        std::process::exit(0);
+                    }
                     let _ = memory::clean_memory(mask, cfg_allow_standby(&handle), false);
                 }
                 cmdline::CommandLineAction::CleanFull => {
+                    if !elevation::is_elevated() && elevation::relaunch_self_as_admin() {
+                        std::process::exit(0);
+                    }
                     let _ =
                         memory::clean_memory(memory::mask::ALL, cfg_allow_standby(&handle), false);
                 }

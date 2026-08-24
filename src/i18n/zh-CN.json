@@ -40,7 +40,7 @@
     "portable": "便携模式",
     "appdata": "应用数据",
     "of": "共",
-    "notElevated": "未获取管理员权限，清理可能无效",
+    "notElevated": "未获取管理员权限，清理可能无效——可在 设置→常规 开启「开机静默自启」永久获取",
     "none": "无",
     "regionsCount": "个区域"
   },
