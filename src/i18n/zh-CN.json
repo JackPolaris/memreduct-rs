@@ -5,6 +5,11 @@
     "settings": "设置",
     "language": "语言"
   },
+  "status": {
+    "ok": "内存健康",
+    "warn": "内存偏高",
+    "crit": "内存告急"
+  },
   "note": {
     "freeze": "可能导致卡顿",
     "win10": "需 Windows 10+",
@@ -34,7 +39,9 @@
     "portable": "便携模式",
     "appdata": "应用数据",
     "of": "共",
-    "notElevated": "未获取管理员权限，清理可能无效"
+    "notElevated": "未获取管理员权限，清理可能无效",
+    "none": "无",
+    "regionsCount": "个区域"
   },
   "confirm": {
     "title": "确认清理以下区域?",

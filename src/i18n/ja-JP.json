@@ -5,6 +5,11 @@
     "settings": "設定",
     "language": "言語"
   },
+  "status": {
+    "ok": "正常",
+    "warn": "高い",
+    "crit": "危機"
+  },
   "note": {
     "freeze": "一時的なフリーズの恐れ",
     "win10": "Windows 10+ が必要",
@@ -34,7 +39,9 @@
     "portable": "ポータブル",
     "appdata": "アプリデータ",
     "of": "合計",
-    "notElevated": "管理者権限がありません - クリーンが無効になる場合があります"
+    "notElevated": "管理者権限がありません - クリーンが無効になる場合があります",
+    "none": "なし",
+    "regionsCount": "領域"
   },
   "confirm": {
     "title": "以下の領域をクリーンしますか?",

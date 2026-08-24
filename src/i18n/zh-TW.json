@@ -5,6 +5,11 @@
     "settings": "設定",
     "language": "語言"
   },
+  "status": {
+    "ok": "記憶體健康",
+    "warn": "記憶體偏高",
+    "crit": "記憶體告急"
+  },
   "note": {
     "freeze": "可能造成卡頓",
     "win10": "需 Windows 10+",
@@ -34,7 +39,9 @@
     "portable": "可攜式模式",
     "appdata": "應用程式資料",
     "of": "共",
-    "notElevated": "未取得管理員權限，清理可能無效"
+    "notElevated": "未取得管理員權限，清理可能無效",
+    "none": "無",
+    "regionsCount": "個區域"
   },
   "confirm": {
     "title": "確認清理以下區域?",

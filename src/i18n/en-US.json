@@ -5,6 +5,11 @@
     "settings": "Settings",
     "language": "Language"
   },
+  "status": {
+    "ok": "Healthy",
+    "warn": "Elevated",
+    "crit": "Critical"
+  },
   "note": {
     "freeze": "may freeze",
     "win10": "Win10+",
@@ -34,7 +39,9 @@
     "portable": "portable",
     "appdata": "appdata",
     "of": "of",
-    "notElevated": "No administrator rights - cleaning may be ineffective"
+    "notElevated": "No administrator rights - cleaning may be ineffective",
+    "none": "None",
+    "regionsCount": "regions"
   },
   "confirm": {
     "title": "Confirm cleaning these regions?",
