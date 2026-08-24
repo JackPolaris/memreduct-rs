@@ -317,6 +317,10 @@ pub fn clean_memory(mask: u32, allow_standby_in_auto: bool, is_autoclean: bool) 
     // elevated the OS will reject the NtSetSystemInformation calls; we still
     // attempt and report results.
 
+    // Enable the SeProfileSingleProcessPrivilege / SeIncreaseQuotaPrivilege
+    // privileges required by the NT memory calls (as the original does).
+    crate::elevation::enable_memory_privileges();
+
     let mut applied_mask = mask;
     if is_autoclean && !allow_standby_in_auto {
         applied_mask &= !mask::FREEZES;

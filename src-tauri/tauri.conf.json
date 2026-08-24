@@ -13,9 +13,9 @@
     "windows": [
       {
         "title": "Mem Reduct",
-        "width": 540,
-        "height": 720,
-        "minWidth": 480,
+        "width": 440,
+        "height": 700,
+        "minWidth": 400,
         "minHeight": 640,
         "resizable": true,
         "center": true

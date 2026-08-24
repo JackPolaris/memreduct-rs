@@ -5,7 +5,11 @@
 //! ourselves through the UAC `runas` verb and exit the current process.
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
-use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
+use windows::Win32::Security::{
+    AdjustTokenPrivileges, GetTokenInformation, LookupPrivilegeValueW, TokenElevation,
+    LUID_AND_ATTRIBUTES, SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES, TOKEN_ELEVATION,
+    TOKEN_PRIVILEGES, TOKEN_QUERY,
+};
 use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
 /// True when the current process token is elevated.
@@ -69,5 +73,55 @@ pub fn ensure_elevated_or_exit() {
     }
     if relaunch_as_admin() {
         std::process::exit(0);
+    }
+}
+
+/// Enable the privileges required by the NT memory calls (mirrors the
+/// original `_r_sys_setprocessprivilege` list used at startup):
+///
+/// - `SeProfileSingleProcessPrivilege` — required by `SystemMemoryListInformation`
+///   (`MemoryEmptyWorkingSets` / `MemoryPurgeStandbyList` etc.)
+/// - `SeIncreaseQuotaPrivilege` — required by `SystemFileCacheInformationEx`
+///
+/// Without these, the calls fail with `STATUS_PRIVILEGE_NOT_HELD`, which is
+/// why cleanup frees far less than the original.
+pub fn enable_memory_privileges() {
+    const SE_PROFILE_SINGLE_PROCESS: &str = "SeProfileSingleProcessPrivilege";
+    const SE_INCREASE_QUOTA: &str = "SeIncreaseQuotaPrivilege";
+
+    unsafe {
+        let mut token = HANDLE::default();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &mut token)
+            .is_err()
+        {
+            return;
+        }
+
+        for name in [SE_PROFILE_SINGLE_PROCESS, SE_INCREASE_QUOTA] {
+            let wide: Vec<u16> = name.encode_utf16().chain(core::iter::once(0)).collect();
+            let mut luid = windows::Win32::Foundation::LUID::default();
+            if LookupPrivilegeValueW(None, windows::core::PCWSTR(wide.as_ptr()), &mut luid).is_err()
+            {
+                continue;
+            }
+
+            let mut tp: TOKEN_PRIVILEGES = core::mem::zeroed();
+            tp.PrivilegeCount = 1;
+            tp.Privileges[0] = LUID_AND_ATTRIBUTES {
+                Luid: luid,
+                Attributes: SE_PRIVILEGE_ENABLED,
+            };
+
+            let _ = AdjustTokenPrivileges(
+                token,
+                false,
+                Some(&tp as *const TOKEN_PRIVILEGES),
+                0,
+                None,
+                None,
+            );
+        }
+
+        let _ = CloseHandle(token);
     }
 }
