@@ -66,6 +66,7 @@
     "checking": "檢查中…",
     "downloading": "下載中…",
     "installNow": "下載安裝",
+    "dismiss": "關閉",
     "updateInstalling": "發現新版本，正在背景下載並安裝…",
     "autoCheck": "啟動時自動檢查更新",
     "updateRepo": "更新來源",

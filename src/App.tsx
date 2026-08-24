@@ -44,6 +44,9 @@ type Tab = "main" | "settings";
 
 type ToastKind = "info" | "success" | "update" | "progress";
 
+/** Stable id for the single "update available" pill (dedup across sources). */
+const UPDATE_PROMPT_ID = 900000001;
+
 interface Toast {
   id: number;
   title: string;
@@ -127,6 +130,12 @@ export default function App() {
     root.style.setProperty("--accent2", accent.secondary);
   }, [config?.accent_color]);
 
+  // Single update-prompt toast id — pushing an update prompt again replaces it.
+  const dismissToast = (id: number) => {
+    if (progressToastId.current === id) progressToastId.current = null;
+    setToasts((ts) => ts.filter((t) => t.id !== id));
+  };
+
   const pushToast = (
     title: string,
     body: string,
@@ -135,21 +144,18 @@ export default function App() {
   ) => {
     const id = opts?.stickyId ?? Date.now() + toastSeq;
     if (opts?.stickyId !== undefined) {
-      // Update an existing sticky toast in place (progress updates).
+      // Update an existing sticky toast in place (progress / deduped prompt).
       setToasts((ts) =>
         ts.map((t) =>
           t.id === id
-            ? { ...t, body, progress: opts?.progress, progressTotal: opts?.progressTotal }
+            ? { ...t, title, body, progress: opts?.progress, progressTotal: opts?.progressTotal, action: opts?.action }
             : t
         )
       );
       return id;
     }
     setToastSeq((s) => s + 1);
-    setToasts((ts) => [
-      ...ts,
-      { id, title, body, kind, progress: opts?.progress, progressTotal: opts?.progressTotal, action: opts?.action },
-    ]);
+    setToasts((ts) => [...ts, { id, title, body, kind, progress: opts?.progress, progressTotal: opts?.progressTotal, action: opts?.action }]);
     if (kind !== "update" && kind !== "progress") {
       setTimeout(() => {
         setToasts((ts) => ts.filter((t) => t.id !== id));
@@ -160,6 +166,8 @@ export default function App() {
 
   // Download & install with a live progress toast (fixed sticky id).
   const startUpdateInstall = async () => {
+    // Dismiss any pending update prompt first (single update flow).
+    setToasts((ts) => ts.filter((t) => t.kind !== "update"));
     const stickyId = Date.now() + 1000000; // stable id for the progress toast
     progressToastId.current = stickyId;
     pushToast(t("settings.updateInstalling"), "0%", "progress", {
@@ -172,7 +180,7 @@ export default function App() {
       // On success the installer launches and the plugin exits the process.
     } catch (e) {
       progressToastId.current = null;
-      setToasts((ts) => ts.filter((t) => t.id !== stickyId));
+      dismissToast(stickyId);
       pushToast(t("settings.updateError"), String(e), "info");
     }
   };
@@ -189,11 +197,12 @@ export default function App() {
         i18n.changeLanguage(c.language);
       }
       // Startup update check (always on): if a new version exists, show an
-      // interactive pill with an "install" button.
+      // interactive pill with an "install" button (deduped to one pill).
       checkForUpdate()
         .then((r) => {
           if (r.available) {
             pushToast(t("settings.updateAvailable"), `v${r.version}`, "update", {
+              stickyId: UPDATE_PROMPT_ID,
               action: () => startUpdateInstall(),
             });
           }
@@ -442,7 +451,7 @@ export default function App() {
         </div>
         <div style={{ display: tab === "settings" ? "flex" : "none", flex: 1, minHeight: 0 }}>
           {config ? (
-            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} section={settingsSection} onSectionChange={setSettingsSection} onToast={pushToast} onUpdate={(v) => { pushToast(t("settings.updateAvailable"), `v${v}`, "update", { action: () => startUpdateInstall() }); }} />
+            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} section={settingsSection} onSectionChange={setSettingsSection} onToast={pushToast} onUpdate={(v) => { pushToast(t("settings.updateAvailable"), `v${v}`, "update", { stickyId: UPDATE_PROMPT_ID, action: () => startUpdateInstall() }); }} />
           ) : null}
         </div>
       </main>
@@ -502,6 +511,16 @@ export default function App() {
                 />
               </span>
             )}
+            <button
+              className="toast-close"
+              title={t("settings.dismiss")}
+              onClick={(e) => {
+                e.stopPropagation();
+                dismissToast(toast.id);
+              }}
+            >
+              ✕
+            </button>
           </div>
         ))}
       </div>

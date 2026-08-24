@@ -66,6 +66,7 @@
     "checking": "確認中…",
     "downloading": "ダウンロード中…",
     "installNow": "ダウンロード・インストール",
+    "dismiss": "閉じる",
     "updateInstalling": "新しいバージョンが見つかりました。バックグラウンドでダウンロード・インストール中…",
     "autoCheck": "起動時に更新をチェック",
     "updateRepo": "更新ソース",

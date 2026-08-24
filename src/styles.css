@@ -1045,7 +1045,7 @@ input[type="color"] {
   align-items: center;
   gap: 7px;
   max-width: min(92vw, 560px);
-  padding: 10px 20px;
+  padding: 10px 8px 10px 20px;
   border-radius: 999px;
   /* Frosted glass pill */
   background: rgba(255, 255, 255, 0.55);
@@ -1053,6 +1053,7 @@ input[type="color"] {
   backdrop-filter: blur(24px) saturate(1.6);
   -webkit-backdrop-filter: blur(24px) saturate(1.6);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  pointer-events: auto;
   animation: toastIn 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -1116,6 +1117,28 @@ input[type="color"] {
   background: var(--accent);
   border-radius: 3px;
   transition: width 0.25s ease;
+}
+
+.toast-close {
+  margin-left: 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.toast-close:hover {
+  background: rgba(127, 127, 127, 0.18);
+  color: var(--text);
 }
 
 @keyframes toastIn {
