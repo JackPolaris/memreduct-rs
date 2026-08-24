@@ -269,6 +269,10 @@ pub struct CleanResult {
     pub applied_mask: u32,
     /// Names of the regions that were cleaned.
     pub regions: Vec<String>,
+    /// True when an elevation (UAC) request was submitted instead of cleaning
+    /// in-process; the elevated helper performs the actual cleanup.
+    #[serde(default)]
+    pub elevation_requested: bool,
 }
 
 /// Flush volume cache by opening each volume and calling `FlushFileBuffers`.
@@ -407,6 +411,7 @@ pub fn clean_memory(mask: u32, allow_standby_in_auto: bool, is_autoclean: bool) 
             .into_iter()
             .map(String::from)
             .collect(),
+        elevation_requested: false,
     }
 }
 

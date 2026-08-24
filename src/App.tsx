@@ -77,11 +77,32 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [toastSeq, setToastSeq] = useState(0);
 
-  // Sync the dark class onto <body> so the outer page background (which is
-  // styled on body, outside the .app element) also switches theme.
+  // Theme: "light" | "dark" | "system" (the legacy use_dark_theme flag is
+  // honoured only for configs saved before the three-state theme existed).
+  const [systemDark, setSystemDark] = useState<boolean>(
+    () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false
+  );
+  const [resolvedDark, setResolvedDark] = useState<boolean>(false);
+
   useEffect(() => {
-    document.body.classList.toggle("dark", Boolean(config?.use_dark_theme));
-  }, [config?.use_dark_theme]);
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!mq) return;
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    setSystemDark(mq.matches);
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    const theme = config?.theme ?? "system";
+    let dark = systemDark;
+    if (theme === "light") dark = false;
+    else if (theme === "dark") dark = true;
+    // Legacy fallback for old configs without a `theme` field.
+    else if (config && config.use_dark_theme && theme === "system") dark = true;
+    setResolvedDark(dark);
+    document.body.classList.toggle("dark", dark);
+  }, [config?.theme, config?.use_dark_theme, systemDark]);
 
   const pushToast = (title: string, body: string, kind: "info" | "success" = "info") => {
     const id = Date.now() + toastSeq;
@@ -154,13 +175,19 @@ export default function App() {
       setLastResult(res);
       getMemoryInfo().then(setInfo).catch(() => {});
       // In-app toast + system notification.
-      const body = `${t("main.released")} ${formatBytes(res.freed_bytes)}${
-        res.regions.length > 0
-          ? ` · ${res.regions.length} ${t("main.regionsCount")}`
-          : ""
-      }`;
+      const body = res.elevation_requested
+        ? t("main.elevationRequested")
+        : `${t("main.released")} ${formatBytes(res.freed_bytes)}${
+            res.regions.length > 0
+              ? ` · ${res.regions.length} ${t("main.regionsCount")}`
+              : ""
+          }`;
       if (config?.balloon_clean_results ?? true) {
-        pushToast(t("main.cleanMemory"), body, "success");
+        pushToast(
+          t("main.cleanMemory"),
+          body,
+          res.elevation_requested ? "info" : "success"
+        );
         notify(t("app.name"), body, config?.notifications_sound ?? true).catch(() => {});
       }
     } catch (e) {
@@ -195,7 +222,7 @@ export default function App() {
   const selectedCount = REGIONS.filter((r) => selectedMask & r.bit).length;
 
   return (
-    <div className={`app ${config?.use_dark_theme ? "dark" : ""}`}>
+    <div className={`app ${resolvedDark ? "dark" : ""}`}>
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark">
@@ -320,12 +347,16 @@ export default function App() {
 
             <div className="result">
               {lastResult ? (
-                <>
-                  {t("main.released")}{" "}
-                  <strong>{formatBytes(lastResult.freed_bytes)}</strong>
-                  {lastResult.regions.length > 0 &&
-                    ` · ${lastResult.regions.length} ${t("main.regionsCount")}`}
-                </>
+                lastResult.elevation_requested ? (
+                  <>{t("main.elevationRequested")}</>
+                ) : (
+                  <>
+                    {t("main.released")}{" "}
+                    <strong>{formatBytes(lastResult.freed_bytes)}</strong>
+                    {lastResult.regions.length > 0 &&
+                      ` · ${lastResult.regions.length} ${t("main.regionsCount")}`}
+                  </>
+                )
               ) : (
                 <>&nbsp;</>
               )}
@@ -514,7 +545,6 @@ function SettingsPanel({
             <>
               <Toggle label={t("settings.alwaysOnTop")} icon={<IconSettings size={15} />} checked={draft.always_on_top} onChange={(v) => set("always_on_top", v)} />
               <Toggle label={t("settings.showCleanConfirmation")} icon={<IconSparkles size={15} />} checked={draft.show_reduct_confirmation} onChange={(v) => set("show_reduct_confirmation", v)} />
-              <Toggle label={t("settings.darkTheme")} icon={<IconPalette size={15} />} checked={draft.use_dark_theme} onChange={(v) => set("use_dark_theme", v)} />
               <Toggle label={t("settings.autoCheck")} icon={<IconSparkles size={15} />} checked={draft.check_updates} onChange={(v) => set("check_updates", v)} />
               <div className="setrow">
                 <span className="setrow-label">{t("settings.updateRepo")}</span>
@@ -581,6 +611,24 @@ function SettingsPanel({
 
           {section === "appearance" && (
             <>
+              <div className="setrow">
+                <span className="setrow-label">
+                  <span className="icon"><IconPalette size={15} /></span>
+                  {t("settings.theme")}
+                </span>
+                <div className="segmented">
+                  {(["light", "dark", "system"] as const).map((th) => (
+                    <button
+                      key={th}
+                      className={draft.theme === th ? "active" : ""}
+                      onClick={() => set("theme", th)}
+                      type="button"
+                    >
+                      {t(`settings.theme_${th}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <ColorRow label={t("settings.textColor")} value={configHex(draft.tray_color_text)} onChange={(v) => set("tray_color_text", parseHex(v))} />
               <ColorRow label={t("settings.backgroundColor")} value={configHex(draft.tray_color_bg)} onChange={(v) => set("tray_color_bg", parseHex(v))} />
               <ColorRow label={t("settings.warningColor")} value={configHex(draft.tray_color_warning)} onChange={(v) => set("tray_color_warning", parseHex(v))} />

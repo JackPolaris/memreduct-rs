@@ -55,11 +55,27 @@ fn clean_memory(
 ) -> CleanResult {
     let cfg = state.config.lock().unwrap().clone();
     let mask = mask.unwrap_or(cfg.reduct_mask);
+    let is_manual = source.as_deref() == Some("manual");
     let is_autoclean = matches!(
         source.as_deref(),
         Some("auto") | Some("hotkey") | Some("cmdline")
     );
     let allow_standby = cfg.allow_standby_list_cleanup;
+
+    // Manual cleanup requests elevation on demand: if the process is not
+    // elevated we submit a UAC `runas` request for a one-shot helper instead of
+    // silently cleaning with limited privileges. Automatic cleanups never
+    // prompt and run in-process (mirrors the original behaviour).
+    if is_manual && !elevation::is_elevated() && elevation::relaunch_as_admin(mask) {
+        return CleanResult {
+            freed_bytes: 0,
+            applied_mask: mask,
+            regions: Vec::new(),
+            elevation_requested: true,
+        };
+    }
+    // Elevation request failed/cancelled → fall through to the attempt
+    // below (limited effect without admin rights).
 
     let result = memory::clean_memory(mask, allow_standby, is_autoclean);
 
@@ -356,6 +372,9 @@ pub fn run() {
                     let _ =
                         memory::clean_memory(memory::mask::ALL, cfg_allow_standby(&handle), false);
                 }
+                // `-clean-once` is handled in main() before the UI starts; this
+                // arm is unreachable here.
+                cmdline::CommandLineAction::CleanOnce(_) => {}
                 cmdline::CommandLineAction::None => {}
             }
 

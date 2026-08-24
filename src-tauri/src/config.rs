@@ -24,6 +24,9 @@ pub struct Config {
     pub start_minimized: bool,
     pub show_reduct_confirmation: bool,
     pub check_updates: bool,
+    // Theme: "light" | "dark" | "system"
+    pub theme: String,
+    // Legacy dark-theme flag (kept for migration from older configs).
     pub use_dark_theme: bool,
     pub language: String,
 
@@ -78,6 +81,7 @@ impl Default for Config {
             start_minimized: false,
             show_reduct_confirmation: true,
             check_updates: false,
+            theme: "system".into(),
             use_dark_theme: false,
             language: "zh-CN".into(),
 

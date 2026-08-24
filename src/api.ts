@@ -21,6 +21,7 @@ export interface CleanResult {
   freed_bytes: number;
   applied_mask: number;
   regions: string[];
+  elevation_requested: boolean;
 }
 
 export interface Config {
@@ -28,6 +29,7 @@ export interface Config {
   start_minimized: boolean;
   show_reduct_confirmation: boolean;
   check_updates: boolean;
+  theme: string;
   use_dark_theme: boolean;
   language: string;
 

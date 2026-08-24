@@ -86,3 +86,42 @@ pub fn enable_memory_privileges() {
         let _ = CloseHandle(token);
     }
 }
+
+/// Relaunch the current executable elevated via the UAC `runas` verb, passing
+/// a single-use `-clean-once <mask>` argument so the elevated copy performs one
+/// cleanup and exits (no second window, no duplicate tray icon).
+///
+/// Returns `true` when the elevation request was successfully submitted.
+pub fn relaunch_as_admin(mask: u32) -> bool {
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+
+    let Some(exe) = std::env::current_exe().ok() else {
+        return false;
+    };
+
+    // Build verb "runas" and the argument "-clean-once <mask>".
+    let verb: Vec<u16> = "runas".encode_utf16().chain(core::iter::once(0)).collect();
+    let exe_wide: Vec<u16> = exe
+        .to_string_lossy()
+        .encode_utf16()
+        .chain(core::iter::once(0))
+        .collect();
+    let args: Vec<u16> = format!("-clean-once {mask}")
+        .encode_utf16()
+        .chain(core::iter::once(0))
+        .collect();
+
+    unsafe {
+        let result = ShellExecuteW(
+            None,
+            windows::core::PCWSTR(verb.as_ptr()),
+            windows::core::PCWSTR(exe_wide.as_ptr()),
+            windows::core::PCWSTR(args.as_ptr()),
+            windows::core::PCWSTR::null(),
+            SW_HIDE,
+        );
+        // ShellExecuteW returns a value greater than 32 on success.
+        result.0 as usize > 32
+    }
+}

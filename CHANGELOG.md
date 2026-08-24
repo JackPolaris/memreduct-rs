@@ -9,8 +9,14 @@
 ### 修复
 - 修复物理内存占用始终显示 0% 的问题 — 改用 `GlobalMemoryStatusEx` 采集
   物理内存(原字节缓冲读取 `SystemPerformanceInformation` 在缓冲不足时失败)
+- 修复 release 版 UAC 通过后应用静默崩溃的问题 — 补充 `plugins.updater`
+  配置,修复托盘图标/页文件解析的潜在 panic(panic=abort 会静默退出)
+- 修复设置面板卡片内容边距不足的问题
 
 ### 新增
+- **按需提权**:应用启动不再弹 UAC,仅手动清理时才请求管理员权限
+  (`-clean-once` 提权 helper),自动清理静默运行
+- **主题切换**:浅色 / 深色 / 跟随系统三态(外观设置)
 - 多语言支持 (i18n): 简体中文(主语言)、繁體中文、English、日本語
 - 全新应用图标 (紫色清理主题 SVG → PNG/ICO)
 - 自动更新检查 (tauri-plugin-updater)

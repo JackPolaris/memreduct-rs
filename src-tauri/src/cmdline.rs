@@ -1,4 +1,5 @@
-//! Command-line parsing (mirrors the original `-clean` / `-clean:full`).
+//! Command-line parsing (mirrors the original `-clean` / `-clean:full`, plus a
+//! single-use `-clean-once <mask>` used by the elevation flow).
 
 use std::env;
 
@@ -9,6 +10,9 @@ pub enum CommandLineAction {
     CleanDefault,
     /// `-clean:full`: clean all memory regions.
     CleanFull,
+    /// `-clean-once <mask>`: perform one cleanup with the given mask and exit
+    /// (used by the elevated helper process).
+    CleanOnce(u32),
     None,
 }
 
@@ -18,14 +22,25 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    for arg in args {
-        let lower = arg.as_ref().to_lowercase();
+    let args: Vec<String> = args.into_iter().map(|a| a.as_ref().to_string()).collect();
+    let mut i = 0;
+    while i < args.len() {
+        let lower = args[i].to_lowercase();
+        if lower == "-clean-once" || lower == "/clean-once" || lower == "--clean-once" {
+            // Optional mask follows this argument.
+            let mask = args
+                .get(i + 1)
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(crate::memory::mask::ALL);
+            return CommandLineAction::CleanOnce(mask);
+        }
         if lower == "-clean" || lower == "/clean" || lower == "--clean" {
             return CommandLineAction::CleanDefault;
         }
         if lower == "-clean:full" || lower == "/clean:full" || lower == "--clean:full" {
             return CommandLineAction::CleanFull;
         }
+        i += 1;
     }
     CommandLineAction::None
 }
@@ -56,5 +71,18 @@ mod tests {
     fn ignores_unrelated() {
         assert_eq!(parse_args(["/something", "foo"]), CommandLineAction::None);
         assert_eq!(parse_args([""]), CommandLineAction::None);
+    }
+
+    #[test]
+    fn parses_clean_once() {
+        assert_eq!(
+            parse_args(["-clean-once", "255"]),
+            CommandLineAction::CleanOnce(255)
+        );
+        // Missing mask → full mask (all 8 regions = 0xFF).
+        assert_eq!(
+            parse_args(["-clean-once"]),
+            CommandLineAction::CleanOnce(crate::memory::mask::ALL)
+        );
     }
 }
