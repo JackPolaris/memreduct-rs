@@ -61,6 +61,7 @@
     "checkNow": "確認",
     "updateAvailable": "新しいバージョンがあります",
     "updateNone": "最新版です",
+    "updateError": "更新サーバーに接続できません",
     "version": "バージョン",
     "darkTheme": "ダークテーマ",
     "autoReduct": "使用率で自動クリーン",

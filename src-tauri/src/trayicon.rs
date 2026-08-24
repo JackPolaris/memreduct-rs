@@ -1,6 +1,6 @@
-//! Tray icon rendering: draws the memory percent as a bitmap number with the
-//! configured background / foreground colours, plus optional transparency,
-//! rounded corners and border. Mirrors the original Mem Reduct tray icon.
+//! Tray icon rendering: draws the memory percent as a bitmap number on a
+//! configurable background, with optional transparency, rounded corners and a
+//! crisp border. Mirrors the original Mem Reduct tray icon.
 
 const SIZE: usize = 32;
 
@@ -17,6 +17,11 @@ const DIGITS: [[u8; 5]; 10] = [
     [0b111, 0b101, 0b111, 0b101, 0b111], // 8
     [0b111, 0b101, 0b111, 0b001, 0b111], // 9
 ];
+
+/// Border thickness in pixels (1..=3).
+const BORDER: usize = 2;
+/// Corner radius when `round` is enabled.
+const RADIUS: isize = 7;
 
 pub struct TrayIconStyle {
     pub bg: [u8; 3],
@@ -52,33 +57,27 @@ pub fn render(percent: u32, style: &TrayIconStyle) -> Vec<u8> {
     let mut buf = vec![0u8; SIZE * SIZE * 4];
     let percent = percent.min(999);
 
-    // Background
     for y in 0..SIZE {
         for x in 0..SIZE {
-            let inside = if style.round {
-                in_rounded_rect(x, y)
-            } else {
-                true
-            };
-            let border_px = style.border && is_border(x, y);
+            let (on_bg, is_border) = classify(x, y, style.round, style.border);
             let idx = (y * SIZE + x) * 4;
-            if inside {
-                let [r, g, b] = if border_px && style.border {
-                    [255u8, 255, 255]
-                } else {
-                    style.bg
-                };
-                buf[idx] = r;
-                buf[idx + 1] = g;
-                buf[idx + 2] = b;
-                buf[idx + 3] = if style.transparent && !border_px && !style.round {
-                    // fully transparent background
-                    0
-                } else {
-                    255
-                };
+            if is_border {
+                // Crisp single-colour border (always opaque).
+                buf[idx] = style.fg[0];
+                buf[idx + 1] = style.fg[1];
+                buf[idx + 2] = style.fg[2];
+                buf[idx + 3] = 255;
+            } else if on_bg {
+                // Background fill; honour transparency.
+                let transparent = style.transparent;
+                if !transparent {
+                    buf[idx] = style.bg[0];
+                    buf[idx + 1] = style.bg[1];
+                    buf[idx + 2] = style.bg[2];
+                }
+                buf[idx + 3] = if transparent { 0 } else { 255 };
             }
-            // outside rounded corners → transparent
+            // else: outside shape → alpha 0 already
         }
     }
 
@@ -88,7 +87,6 @@ pub fn render(percent: u32, style: &TrayIconStyle) -> Vec<u8> {
         .bytes()
         .map(|b| b - b'0')
         .collect();
-    // Each glyph: 3x5 cells at scale. Choose scale so text fits.
     let scale = match digits.len() {
         1 => 5,
         2 => 3,
@@ -108,7 +106,6 @@ pub fn render(percent: u32, style: &TrayIconStyle) -> Vec<u8> {
             let bits = DIGITS[*digit as usize][row];
             for col in 0..3 {
                 if bits & (1 << (2 - col)) != 0 {
-                    // fill scale x scale block
                     for dy in 0..scale {
                         for dx in 0..scale {
                             let x = ox + (col * scale + dx) as isize;
@@ -130,30 +127,45 @@ pub fn render(percent: u32, style: &TrayIconStyle) -> Vec<u8> {
     buf
 }
 
-fn in_rounded_rect(x: usize, y: usize) -> bool {
-    let r = 7;
+/// Classify a pixel: inside background shape, and whether it's border.
+fn classify(x: usize, y: usize, round: bool, border: bool) -> (bool, bool) {
+    let inside = if round {
+        in_rounded(x, y)
+    } else {
+        true
+    };
+    if !inside {
+        return (false, false);
+    }
+    let is_border = border && is_border_pixel(x, y);
+    // Background is inside minus the border ring.
+    let on_bg = !is_border;
+    (on_bg, is_border)
+}
+
+fn in_rounded(x: usize, y: usize) -> bool {
     let cx = x as isize;
     let cy = y as isize;
     if cx < 0 || cy < 0 || cx >= SIZE as isize || cy >= SIZE as isize {
         return false;
     }
-    // corner check
+    let r = RADIUS;
     let left = cx < r;
     let right = cx >= (SIZE as isize - r);
     let top = cy < r;
     let bottom = cy >= (SIZE as isize - r);
     if (left && top) || (right && top) || (left && bottom) || (right && bottom) {
-        // distance to corner center
-        let corner_x = if left { r as isize } else { SIZE as isize - 1 - r as isize };
-        let corner_y = if top { r as isize } else { SIZE as isize - 1 - r as isize };
+        let corner_x = if left { r } else { SIZE as isize - 1 - r };
+        let corner_y = if top { r } else { SIZE as isize - 1 - r };
         let dx = cx - corner_x;
         let dy = cy - corner_y;
-        dx * dx + dy * dy <= (r as isize) * (r as isize)
+        dx * dx + dy * dy <= r * r
     } else {
         true
     }
 }
 
-fn is_border(x: usize, y: usize) -> bool {
-    x == 0 || y == 0 || x == SIZE - 1 || y == SIZE - 1
+/// A pixel belongs to the border ring (contiguous thickness).
+fn is_border_pixel(x: usize, y: usize) -> bool {
+    x < BORDER || y < BORDER || x >= SIZE - BORDER || y >= SIZE - BORDER
 }

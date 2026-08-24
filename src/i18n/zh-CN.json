@@ -61,6 +61,7 @@
     "checkNow": "检查",
     "updateAvailable": "发现新版本",
     "updateNone": "当前已是最新版本",
+    "updateError": "无法连接更新服务器",
     "version": "版本",
     "darkTheme": "深色主题",
     "autoReduct": "按占用率自动清理",

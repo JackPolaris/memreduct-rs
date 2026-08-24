@@ -61,6 +61,7 @@
     "checkNow": "Check",
     "updateAvailable": "New version available",
     "updateNone": "You're up to date",
+    "updateError": "Unable to reach update server",
     "version": "Version",
     "darkTheme": "Dark theme",
     "autoReduct": "Auto-reduct by usage",

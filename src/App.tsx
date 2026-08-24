@@ -491,7 +491,9 @@ function SettingsPanel({
                   className="chipbtn"
                   onClick={async () => {
                     const r = await checkForUpdates();
-                    if (r.hasUpdate) {
+                    if (r.error) {
+                      notify(t("settings.updateError"), "", true).catch(() => {});
+                    } else if (r.hasUpdate) {
                       notify(t("settings.updateAvailable"), `v${r.latest}`, true).catch(() => {});
                     } else {
                       notify(t("settings.updateNone"), `${t("settings.version")} ${r.current}`, true).catch(() => {});

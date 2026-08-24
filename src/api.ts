@@ -79,7 +79,7 @@ export const notify = (title: string, body: string, system = true) =>
   invoke<void>("notify", { title, body, system });
 
 // Check the latest release from GitHub (uses the public API directly).
-export async function checkForUpdates(): Promise<{ latest: string; current: string; hasUpdate: boolean }> {
+export async function checkForUpdates(): Promise<{ latest: string; current: string; hasUpdate: boolean; error: boolean }> {
   const current = "3.5.3";
   try {
     const resp = await fetch(
@@ -88,12 +88,25 @@ export async function checkForUpdates(): Promise<{ latest: string; current: stri
     );
     if (!resp.ok) throw new Error(String(resp.status));
     const data = await resp.json();
-    const latest = String(data.tag_name || "").replace(/^v\.?|^V\.?/, "");
-    const hasUpdate = latest !== "" && latest !== current;
-    return { latest, current, hasUpdate };
+    const latest = String(data.tag_name || "").replace(/^v\.?\s*|^V\.?\s*/i, "");
+    const hasUpdate = latest !== "" && cmpVersion(latest, current) > 0;
+    return { latest, current, hasUpdate, error: false };
   } catch (e) {
-    return { latest: "", current, hasUpdate: false };
+    return { latest: "", current, hasUpdate: false, error: true };
   }
+}
+
+// Compare two "x.y.z" version strings: >0 if a>b, <0 if a<b, 0 if equal.
+// Non-numeric parts are treated as 0.
+function cmpVersion(a: string, b: string): number {
+  const pa = (a || "0").split(/[.+-]/).map((n) => parseInt(n, 10) || 0);
+  const pb = (b || "0").split(/[.+-]/).map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d !== 0) return d;
+  }
+  return 0;
 }
 export const getConfig = () => invoke<Config>("get_config");
 export const saveConfig = (config: Config) =>
