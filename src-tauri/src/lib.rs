@@ -382,21 +382,21 @@ pub fn run() {
             // Start the global hotkey (default Ctrl+F1) if enabled.
             register_hotkey(&handle);
 
-            // Apply window settings (always-on-top / start minimized).
+            // Apply window settings (always-on-top).
             apply_window_settings(&handle);
-            {
-                let cfg = handle.state::<AppState>().config.lock().unwrap().clone();
-                if cfg.start_minimized {
-                    if let Some(w) = handle.get_webview_window("main") {
-                        let _ = w.hide();
-                    }
-                }
-            }
 
             // Spawn the periodic background loop.
             spawn_background(handle.clone());
 
             Ok(())
+        })
+        // Keep the app running in the tray: closing the window hides it instead
+        // of quitting, so the tray icon stays (restorable by clicking it).
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             get_memory_info,

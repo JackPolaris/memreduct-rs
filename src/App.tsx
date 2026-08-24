@@ -76,6 +76,12 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [toastSeq, setToastSeq] = useState(0);
 
+  // Sync the dark class onto <body> so the outer page background (which is
+  // styled on body, outside the .app element) also switches theme.
+  useEffect(() => {
+    document.body.classList.toggle("dark", Boolean(config?.use_dark_theme));
+  }, [config?.use_dark_theme]);
+
   const pushToast = (title: string, body: string, kind: "info" | "success" = "info") => {
     const id = Date.now() + toastSeq;
     setToastSeq((s) => s + 1);
@@ -142,8 +148,10 @@ export default function App() {
           ? ` · ${res.regions.length} ${t("main.regionsCount")}`
           : ""
       }`;
-      pushToast(t("main.cleanMemory"), body, "success");
-      notify(t("app.name"), body, config?.balloon_clean_results ?? true).catch(() => {});
+      if (config?.balloon_clean_results ?? true) {
+        pushToast(t("main.cleanMemory"), body, "success");
+        notify(t("app.name"), body, config?.notifications_sound ?? true).catch(() => {});
+      }
     } catch (e) {
       console.error("clean failed", e);
     } finally {
@@ -473,7 +481,6 @@ function SettingsPanel({
           {section === "general" && (
             <>
               <Toggle label={t("settings.alwaysOnTop")} icon={<IconSettings size={15} />} checked={draft.always_on_top} onChange={(v) => set("always_on_top", v)} />
-              <Toggle label={t("settings.startMinimized")} icon={<IconSettings size={15} />} checked={draft.start_minimized} onChange={(v) => set("start_minimized", v)} />
               <Toggle label={t("settings.showCleanConfirmation")} icon={<IconSparkles size={15} />} checked={draft.show_reduct_confirmation} onChange={(v) => set("show_reduct_confirmation", v)} />
               <div className="setrow">
                 <span className="setrow-label">

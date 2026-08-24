@@ -39,7 +39,8 @@
   --blur: 18px;
 }
 
-.app.dark {
+.app.dark,
+body.dark {
   --bg: #0d1117;
   --bg-grad-1: #0a0e14;
   --bg-grad-2: #121823;
