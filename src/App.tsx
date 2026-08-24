@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import i18n from "./i18n";
@@ -42,11 +42,19 @@ import {
 
 type Tab = "main" | "settings";
 
+type ToastKind = "info" | "success" | "update" | "progress";
+
 interface Toast {
   id: number;
   title: string;
   body: string;
-  kind: "info" | "success";
+  kind: ToastKind;
+  /** download progress in bytes downloaded (or 0..1) */
+  progress?: number;
+  /** total bytes for the progress bar */
+  progressTotal?: number;
+  /** action for the "update" kind button */
+  action?: () => void;
 }
 
 function formatBytes(n: number): string {
@@ -82,6 +90,7 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [toastSeq, setToastSeq] = useState(0);
   const [version, setVersion] = useState<string>("3.5.3");
+  const progressToastId = useRef<number | null>(null);
 
   // Theme: "light" | "dark" | "system" (the legacy use_dark_theme flag is
   // honoured only for configs saved before the three-state theme existed).
@@ -118,13 +127,54 @@ export default function App() {
     root.style.setProperty("--accent2", accent.secondary);
   }, [config?.accent_color]);
 
-  const pushToast = (title: string, body: string, kind: "info" | "success" = "info") => {
-    const id = Date.now() + toastSeq;
+  const pushToast = (
+    title: string,
+    body: string,
+    kind: ToastKind = "info",
+    opts?: { progress?: number; progressTotal?: number; action?: () => void; stickyId?: number }
+  ) => {
+    const id = opts?.stickyId ?? Date.now() + toastSeq;
+    if (opts?.stickyId !== undefined) {
+      // Update an existing sticky toast in place (progress updates).
+      setToasts((ts) =>
+        ts.map((t) =>
+          t.id === id
+            ? { ...t, body, progress: opts?.progress, progressTotal: opts?.progressTotal }
+            : t
+        )
+      );
+      return id;
+    }
     setToastSeq((s) => s + 1);
-    setToasts((ts) => [...ts, { id, title, body, kind }]);
-    setTimeout(() => {
-      setToasts((ts) => ts.filter((t) => t.id !== id));
-    }, 4200);
+    setToasts((ts) => [
+      ...ts,
+      { id, title, body, kind, progress: opts?.progress, progressTotal: opts?.progressTotal, action: opts?.action },
+    ]);
+    if (kind !== "update" && kind !== "progress") {
+      setTimeout(() => {
+        setToasts((ts) => ts.filter((t) => t.id !== id));
+      }, 4200);
+    }
+    return id;
+  };
+
+  // Download & install with a live progress toast (fixed sticky id).
+  const startUpdateInstall = async () => {
+    const stickyId = Date.now() + 1000000; // stable id for the progress toast
+    progressToastId.current = stickyId;
+    pushToast(t("settings.updateInstalling"), "0%", "progress", {
+      stickyId,
+      progress: 0,
+      progressTotal: 100,
+    });
+    try {
+      await downloadAndInstall();
+      // On success the installer launches and the plugin exits the process.
+    } catch (e) {
+      progressToastId.current = null;
+      setToasts((ts) => ts.filter((t) => t.id !== stickyId));
+      pushToast(t("settings.updateError"), String(e), "info");
+    }
   };
 
   useEffect(() => {
@@ -138,12 +188,14 @@ export default function App() {
       if (c.language && c.language !== i18n.language) {
         i18n.changeLanguage(c.language);
       }
-      // Startup update check (always on): if a new version exists, show a
-      // toast so the user can tap it to download & install.
+      // Startup update check (always on): if a new version exists, show an
+      // interactive pill with an "install" button.
       checkForUpdate()
         .then((r) => {
           if (r.available) {
-            pushToast(t("settings.updateAvailable"), `v${r.version}`, "info");
+            pushToast(t("settings.updateAvailable"), `v${r.version}`, "update", {
+              action: () => startUpdateInstall(),
+            });
           }
         })
         .catch(() => {});
@@ -165,6 +217,22 @@ export default function App() {
     const unlistenToast = listen<{ title: string; body: string }>("app-toast", (e) => {
       pushToast(e.payload.title, e.payload.body, "info");
     });
+    const unlistenProgress = listen<{ chunk: number; total: number | null }>(
+      "update-progress",
+      (e) => {
+        const pid = progressToastId.current;
+        if (pid === null) return;
+        const total = e.payload.total ?? 0;
+        const pct = total > 0 ? Math.round((e.payload.chunk / total) * 100) : 0;
+        setToasts((ts) =>
+          ts.map((t) =>
+            t.id === pid
+              ? { ...t, progress: pct, progressTotal: 100, body: `${pct}%` }
+              : t
+          )
+        );
+      }
+    );
 
     const poll = setInterval(() => {
       getMemoryInfo().then(setInfo).catch(() => {});
@@ -177,6 +245,7 @@ export default function App() {
       unlistenSettings.then((fn) => fn());
       unlistenAbout.then((fn) => fn());
       unlistenToast.then((fn) => fn());
+      unlistenProgress.then((fn) => fn());
     };
   }, []);
 
@@ -373,7 +442,7 @@ export default function App() {
         </div>
         <div style={{ display: tab === "settings" ? "flex" : "none", flex: 1, minHeight: 0 }}>
           {config ? (
-            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} section={settingsSection} onSectionChange={setSettingsSection} onToast={pushToast} />
+            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} section={settingsSection} onSectionChange={setSettingsSection} onToast={pushToast} onUpdate={(v) => { pushToast(t("settings.updateAvailable"), `v${v}`, "update", { action: () => startUpdateInstall() }); }} />
           ) : null}
         </div>
       </main>
@@ -414,6 +483,25 @@ export default function App() {
             <span className="toast-title">{toast.title}</span>
             <span className="toast-dot">·</span>
             <span className="toast-body">{toast.body}</span>
+            {toast.kind === "update" && toast.action && (
+              <button
+                className="toast-action"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toast.action?.();
+                }}
+              >
+                {t("settings.installNow")}
+              </button>
+            )}
+            {toast.kind === "progress" && (
+              <span className="toast-progress">
+                <span
+                  className="toast-progress-fill"
+                  style={{ width: `${toast.progress ?? 0}%` }}
+                />
+              </span>
+            )}
           </div>
         ))}
       </div>
@@ -490,6 +578,7 @@ function SettingsPanel({
   section,
   onSectionChange,
   onToast,
+  onUpdate,
 }: {
   config: Config;
   t: (k: string) => string;
@@ -498,6 +587,7 @@ function SettingsPanel({
   section: Section;
   onSectionChange: (s: Section) => void;
   onToast: (title: string, body: string, kind?: "info" | "success") => void;
+  onUpdate: (version: string) => void;
 }) {
   const [draft, setDraft] = useState<Config>(config);
   const [autostart, setAutostartState] = useState<boolean>(false);
@@ -569,11 +659,9 @@ function SettingsPanel({
     try {
       const r = await checkForUpdate();
       if (r.available) {
-        setUpdatePhase("downloading");
-        onToast(t("settings.updateInstalling"), `v${r.version}`, "info");
-        notify(t("settings.updateInstalling"), `v${r.version}`, true).catch(() => {});
-        await downloadAndInstall();
         setUpdatePhase("idle");
+        // Delegate to the shared update flow (interactive pill + progress).
+        onUpdate(r.version);
       } else {
         onToast(t("settings.updateNone"), `${t("settings.version")} ${r.current_version}`, "success");
         notify(t("settings.updateNone"), `${t("settings.version")} ${r.current_version}`, true).catch(() => {});

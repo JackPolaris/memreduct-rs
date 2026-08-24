@@ -1,11 +1,11 @@
 {
-  "version": "3.5.6",
-  "notes": "Mem Reduct 3.5.6\n\n- 更新功能测试版本",
-  "pub_date": "2026-08-24T19:20:00Z",
+  "version": "3.5.7",
+  "notes": "Mem Reduct 3.5.7\n\n- 修复下载后应用退出但安装未执行的问题\n- 通知条支持交互(立即更新按钮 + 下载进度条)\n- 更新全链路 UI 打通",
+  "pub_date": "2026-08-24T19:34:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TWxiUE9HYjNsUWJEWDZKa1RxWXJGSGkyME9VUEk1OHZMazYvM01TS1RJVTRnWFpBVW1TKzJ0MCtBUEFhb2IzMTc4MzdDcmQxamdzMDdiRXJGVFJpemc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NTk4MjIyCWZpbGU6TWVtIFJlZHVjdF8zLjUuNl94NjQtc2V0dXAuZXhlCm9jNnh5VjhVNSt5bTQvZ3Z2UDZJckhZaXZadzMrVVRVTWgwTi9hZklZajZ0WUpVWWZjeURWTGdYbktHYmxLNWpQZWVSZlUxM09mVzFRZzZ1R0dPVEJ3PT0K",
-      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.6/Mem.Reduct_3.5.6_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TWtUd0ZLMjh1ODhvRlNia1p3ZGR3Tjc1K1NsdnR5VVZwQjRkcUk4SUhHd3ZZNXkwMGx5VEtQNXc5b1Izc1VPRWlpc2NFci9xTEF3cjFYQnZmRzBzbEFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NTk5MjgxCWZpbGU6TWVtIFJlZHVjdF8zLjUuN194NjQtc2V0dXAuZXhlCkc3aUJycS9xMFhMRFVZM1gvQ0xIZTNzdzBsdjRKTU5Xd2d1cmJBS0lTWXFWelhiYkUxaWdtMU9rTTVna1BLaDVEbzE4Lys3M3BaQWwwZ1VmV3NZY0JnPT0K",
+      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.7/Mem.Reduct_3.5.7_x64-setup.exe"
     }
   }
 }

@@ -4,7 +4,7 @@
 //! (`JackPolaris/memreduct-rs`); the UI only exposes a single "Check for
 //! updates" button and the current version — no repo/key configuration.
 
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::{UpdaterBuilder, UpdaterExt};
 
 use crate::AppState;
@@ -84,16 +84,20 @@ pub async fn download_and_install(app: AppHandle) -> Result<(), String> {
     let update = updater.check().await.map_err(|e| e.to_string())?;
     let update = update.ok_or_else(|| "没有可用更新".to_string())?;
 
-    // Download and run the installer. The plugin handles the download and the
-    // Windows installer (passive). Once the installer finishes, this process
-    // exits so the new version can take over.
+    // Download with live progress emitted to the frontend. The `on_download_finish`
+    // callback must stay empty: exiting here would kill the process BEFORE the
+    // installer is launched. `Update::install` itself ShellExecutes the
+    // installer and then calls `std::process::exit(0)` on its own.
+    let progress_app = app.clone();
     update
         .download_and_install(
-            |_chunk, _total| {},
-            || {
-                // Installer finished: quit the app to let the new version launch.
-                app.exit(0);
+            move |chunk, total| {
+                let _ = progress_app.emit(
+                    "update-progress",
+                    serde_json::json!({ "chunk": chunk, "total": total }),
+                );
             },
+            || {},
         )
         .await
         .map_err(|e| format!("下载/安装更新失败: {e}"))
@@ -101,8 +105,6 @@ pub async fn download_and_install(app: AppHandle) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn remote_release_parses_manifest() {
         // Use the REAL manifest content downloaded from GitHub (verbatim).
