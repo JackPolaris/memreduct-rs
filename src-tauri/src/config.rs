@@ -201,26 +201,6 @@ pub fn color_to_hex(rgb: u32) -> String {
     format!("#{:02x}{:02x}{:02x}", r, g, b)
 }
 
-/// Append a line to the cleanup log file (best-effort).
-pub fn log_cleanup(line: &str) {
-    use std::io::Write;
-    let path = data_dir().join("memreduct.log");
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-    {
-        let _ = writeln!(f, "[{}] {line}", unix_now_str());
-    }
-}
-
-fn unix_now_str() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

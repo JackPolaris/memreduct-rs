@@ -76,14 +76,6 @@ fn clean_memory(
 
     let result = memory::clean_memory(mask, allow_standby, is_autoclean);
 
-    // Log cleanup result if enabled.
-    if cfg.log_clean_results {
-        config::log_cleanup(&format!(
-            "freed {} bytes, regions {:?}",
-            result.freed_bytes, result.regions
-        ));
-    }
-
     // Update statistic timestamp.
     let mut guard = state.config.lock().unwrap();
     guard.statistic_last_reduct = unix_now();

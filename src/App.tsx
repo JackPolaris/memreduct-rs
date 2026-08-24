@@ -12,7 +12,6 @@ import {
   getMemoryInfo,
   getOsInfo,
   getVersion,
-  isElevated,
   notify,
   openExternal,
   saveConfig,
@@ -79,7 +78,6 @@ export default function App() {
   const [cleaning, setCleaning] = useState(false);
   const [lastResult, setLastResult] = useState<CleanResult | null>(null);
   const [confirmMask, setConfirmMask] = useState<number | null>(null);
-  const [elevated, setElevated] = useState<boolean>(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [toastSeq, setToastSeq] = useState(0);
   const [version, setVersion] = useState<string>("3.5.3");
@@ -133,7 +131,6 @@ export default function App() {
     getOsInfo().then(setOsInfo);
     getConfigLocation().then(setConfigLocation);
     getVersion().then(setVersion).catch(() => {});
-    isElevated().then(setElevated).catch(() => setElevated(false));
     getConfig().then((c) => {
       setConfig(c);
       setSelectedMask(c.reduct_mask);
@@ -271,12 +268,6 @@ export default function App() {
                 <span className="dot" />
                 {t(`status.${pressure}`)}
               </span>
-              {!elevated && (
-                <span className="statuschip crit">
-                  <IconShield size={13} />
-                  {t("main.notElevated")}
-                </span>
-              )}
               <span className="statusbar-note">
                 {configLocation === "portable" ? t("main.portable") : t("main.appdata")}
                 {osInfo && ` · Win ${osInfo.major}.${osInfo.minor}`} · v3.5.3
@@ -486,7 +477,7 @@ function RegionCard({
   );
 }
 
-type Section = "general" | "memory" | "appearance" | "tray" | "advanced" | "about";
+type Section = "general" | "memory" | "appearance" | "tray" | "about";
 
 function SettingsPanel({
   config,
@@ -558,7 +549,6 @@ function SettingsPanel({
     { id: "memory", icon: <IconBolt size={14} /> },
     { id: "appearance", icon: <IconPalette size={14} /> },
     { id: "tray", icon: <IconTray size={14} /> },
-    { id: "advanced", icon: <IconKeyboard size={14} /> },
     { id: "about", icon: <IconInfo size={14} /> },
   ];
 
@@ -585,6 +575,13 @@ function SettingsPanel({
               <Toggle label={t("settings.autostart")} icon={<IconBolt size={15} />} checked={autostart} onChange={toggleAutostart} />
               <div className="hint">{t("settings.autostartHint")}</div>
               <Toggle label={t("settings.showCleanConfirmation")} icon={<IconSparkles size={15} />} checked={draft.show_reduct_confirmation} onChange={(v) => set("show_reduct_confirmation", v)} />
+              <Toggle label={t("settings.hotkeyClean")} icon={<IconKeyboard size={15} />} checked={draft.hotkey_clean_enable} onChange={(v) => set("hotkey_clean_enable", v)} />
+              {draft.hotkey_clean_enable && (
+                <div className="setrow">
+                  <span className="setrow-label">{t("settings.hotkeyCombo")}</span>
+                  <HotkeyRecorder value={draft.hotkey_clean} onChange={(v) => set("hotkey_clean", v)} />
+                </div>
+              )}
               <div className="setrow">
                 <span className="setrow-label">
                   <span className="icon"><IconDrive size={15} /></span>
@@ -674,21 +671,8 @@ function SettingsPanel({
               <Select label={t("settings.middleClickAction")} value={draft.tray_action_mc} onChange={(v) => set("tray_action_mc", v)} options={[[0, t("tray.show")], [1, t("tray.clean")]]} />
               <Slider label={t("settings.warningLevel")} value={draft.tray_level_warning} min={0} max={100} onChange={(v) => set("tray_level_warning", v)} />
               <Slider label={t("settings.dangerLevel")} value={draft.tray_level_danger} min={0} max={100} onChange={(v) => set("tray_level_danger", v)} />
-            </>
-          )}
-
-          {section === "advanced" && (
-            <>
               <Toggle label={t("settings.notificationSound")} icon={<IconBell size={15} />} checked={draft.notifications_sound} onChange={(v) => set("notifications_sound", v)} />
               <Toggle label={t("settings.showCleanResult")} icon={<IconSparkles size={15} />} checked={draft.balloon_clean_results} onChange={(v) => set("balloon_clean_results", v)} />
-              <Toggle label={t("settings.logCleanResults")} icon={<IconDrive size={15} />} checked={draft.log_clean_results} onChange={(v) => set("log_clean_results", v)} />
-              <Toggle label={t("settings.hotkeyClean")} icon={<IconKeyboard size={15} />} checked={draft.hotkey_clean_enable} onChange={(v) => set("hotkey_clean_enable", v)} />
-              {draft.hotkey_clean_enable && (
-                <div className="setrow">
-                  <span className="setrow-label">{t("settings.hotkeyCombo")}</span>
-                  <HotkeyRecorder value={draft.hotkey_clean} onChange={(v) => set("hotkey_clean", v)} />
-                </div>
-              )}
             </>
           )}
 
