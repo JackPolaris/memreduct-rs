@@ -24,8 +24,11 @@ pub struct UpdateInfo {
 
 /// Build the updater against the hardcoded official repository.
 fn build_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
+    // Note: `{{target}}` is substituted at build time ONLY for endpoints in
+    // tauri.conf.json; since these endpoints are set at runtime we use the
+    // concrete Windows target directly.
     let endpoints = format!(
-        "https://github.com/{UPDATE_REPO}/releases/latest/download/update-{{{{target}}}}.json"
+        "https://github.com/{UPDATE_REPO}/releases/latest/download/update-x86_64-pc-windows-msvc.json"
     );
 
     let pubkey = app
