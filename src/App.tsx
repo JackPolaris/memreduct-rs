@@ -410,6 +410,7 @@ export default function App() {
         {toasts.map((toast) => (
           <div key={toast.id} className={`toast ${toast.kind}`}>
             <span className="toast-title">{toast.title}</span>
+            <span className="toast-dot">·</span>
             <span className="toast-body">{toast.body}</span>
           </div>
         ))}
