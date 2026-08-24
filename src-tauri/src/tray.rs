@@ -44,14 +44,20 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<TrayIcon> {
 
     let app_handle = app.clone();
 
-    let tray = TrayIconBuilder::with_id("main-tray")
+    let mut tray_builder = TrayIconBuilder::with_id("main-tray")
         .tooltip("Mem Reduct")
         .title("0%")
-        .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
         // On Windows the menu should open with right-click only; left click
         // is reserved for showing the window.
-        .show_menu_on_left_click(false)
+        .show_menu_on_left_click(false);
+
+    // Set the icon only if available; a missing icon must not crash the app.
+    if let Some(icon) = app.default_window_icon() {
+        tray_builder = tray_builder.icon(icon.clone());
+    }
+
+    let tray = tray_builder
         .on_menu_event(move |_app, event| handle_menu(&app_handle, event.id().as_ref()))
         .on_tray_icon_event(|tray, event| match event {
             TrayIconEvent::DoubleClick {

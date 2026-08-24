@@ -228,12 +228,16 @@ unsafe fn read_pagefile_info(page_size: u64) -> MemoryObject {
 
         // Walk the linked list.
         let base = buf.as_ptr();
+        let buf_len = buf.len();
         let mut offset: usize = 0;
         let mut first = true;
-        loop {
-            let entry = (base.add(offset) as *const SYSTEM_PAGEFILE_INFORMATION)
-                .as_ref()
-                .unwrap();
+        while offset < buf_len {
+            // Guard against malformed offsets to avoid a panic on bad data.
+            let Some(entry) =
+                (unsafe { (base.add(offset) as *const SYSTEM_PAGEFILE_INFORMATION).as_ref() })
+            else {
+                break;
+            };
             if entry.NextEntryOffset == 0 && !first {
                 break;
             }
