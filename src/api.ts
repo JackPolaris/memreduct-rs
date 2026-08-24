@@ -30,6 +30,7 @@ export interface Config {
   show_reduct_confirmation: boolean;
   check_updates: boolean;
   theme: string;
+  accent_color: string;
   use_dark_theme: boolean;
   language: string;
 
@@ -100,3 +101,6 @@ export const saveConfig = (config: Config) =>
   invoke<void>("save_config", { config });
 export const getConfigLocation = () => invoke<string>("get_config_location");
 export const getOsInfo = () => invoke<OsInfo>("get_os_info");
+export const getAutostart = () => invoke<boolean>("get_autostart");
+export const setAutostart = (enabled: boolean) =>
+  invoke<string>("set_autostart", { enabled });

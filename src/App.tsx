@@ -6,6 +6,7 @@ import {
   checkForUpdate,
   cleanMemory,
   downloadAndInstall,
+  getAutostart,
   getConfig,
   getConfigLocation,
   getMemoryInfo,
@@ -13,6 +14,7 @@ import {
   isElevated,
   notify,
   saveConfig,
+  setAutostart,
   type CleanResult,
   type Config,
   type MemoryInfo,
@@ -20,6 +22,7 @@ import {
 } from "./api";
 import { MASK_ALL, MASK_DEFAULT, REGIONS } from "./regions";
 import { SUPPORTED_LANGUAGES } from "./i18n";
+import { ACCENTS, accentByKey } from "./accents";
 import {
   IconBell,
   IconBolt,
@@ -103,6 +106,14 @@ export default function App() {
     setResolvedDark(dark);
     document.body.classList.toggle("dark", dark);
   }, [config?.theme, config?.use_dark_theme, systemDark]);
+
+  // Apply the accent color preset to CSS variables (--accent / --accent2).
+  useEffect(() => {
+    const accent = accentByKey(config?.accent_color ?? "green");
+    const root = document.documentElement;
+    root.style.setProperty("--accent", accent.primary);
+    root.style.setProperty("--accent2", accent.secondary);
+  }, [config?.accent_color]);
 
   const pushToast = (title: string, body: string, kind: "info" | "success" = "info") => {
     const id = Date.now() + toastSeq;
@@ -481,10 +492,33 @@ function SettingsPanel({
 }) {
   const [draft, setDraft] = useState<Config>(config);
   const [section, setSection] = useState<Section>("general");
+  const [autostart, setAutostartState] = useState<boolean>(false);
 
   useEffect(() => {
     setDraft(config);
   }, [config]);
+
+  // Query the scheduled-task state once; keep it in sync with the switch.
+  useEffect(() => {
+    getAutostart().then(setAutostartState).catch(() => {});
+  }, []);
+
+  const toggleAutostart = async (enabled: boolean) => {
+    try {
+      const status = await setAutostart(enabled);
+      if (status === "elevation_requested") {
+        // The UAC prompt was shown; re-read the actual state shortly after.
+        setTimeout(() => {
+          getAutostart().then(setAutostartState).catch(() => {});
+        }, 2500);
+      } else {
+        setAutostartState(enabled);
+      }
+    } catch (e) {
+      notify(t("settings.autostart"), String(e), true).catch(() => {});
+      getAutostart().then(setAutostartState).catch(() => {});
+    }
+  };
 
   const set = <K extends keyof Config>(k: K, v: Config[K]) => {
     setDraft((d) => {
@@ -543,6 +577,8 @@ function SettingsPanel({
           <div className="setgroup-title">{t(`settings.${section}`)}</div>
           {section === "general" && (
             <>
+              <Toggle label={t("settings.autostart")} icon={<IconBolt size={15} />} checked={autostart} onChange={toggleAutostart} />
+              <div className="hint">{t("settings.autostartHint")}</div>
               <Toggle label={t("settings.alwaysOnTop")} icon={<IconSettings size={15} />} checked={draft.always_on_top} onChange={(v) => set("always_on_top", v)} />
               <Toggle label={t("settings.showCleanConfirmation")} icon={<IconSparkles size={15} />} checked={draft.show_reduct_confirmation} onChange={(v) => set("show_reduct_confirmation", v)} />
               <Toggle label={t("settings.autoCheck")} icon={<IconSparkles size={15} />} checked={draft.check_updates} onChange={(v) => set("check_updates", v)} />
@@ -626,6 +662,25 @@ function SettingsPanel({
                     >
                       {t(`settings.theme_${th}`)}
                     </button>
+                  ))}
+                </div>
+              </div>
+              <div className="setrow">
+                <span className="setrow-label">
+                  <span className="icon"><IconPalette size={15} /></span>
+                  {t("settings.accentColor")}
+                </span>
+                <div className="accent-swatches">
+                  {ACCENTS.map((a) => (
+                    <button
+                      key={a.key}
+                      className={`swatch ${draft.accent_color === a.key ? "active" : ""}`}
+                      style={{ background: a.primary }}
+                      title={a.name}
+                      onClick={() => set("accent_color", a.key)}
+                      type="button"
+                      aria-label={a.name}
+                    />
                   ))}
                 </div>
               </div>

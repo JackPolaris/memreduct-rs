@@ -26,6 +26,8 @@ pub struct Config {
     pub check_updates: bool,
     // Theme: "light" | "dark" | "system"
     pub theme: String,
+    // Accent color preset key (e.g. "green", "purple", "blue", ...).
+    pub accent_color: String,
     // Legacy dark-theme flag (kept for migration from older configs).
     pub use_dark_theme: bool,
     pub language: String,
@@ -82,6 +84,7 @@ impl Default for Config {
             show_reduct_confirmation: true,
             check_updates: false,
             theme: "system".into(),
+            accent_color: "green".into(),
             use_dark_theme: false,
             language: "zh-CN".into(),
 

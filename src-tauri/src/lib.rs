@@ -3,6 +3,7 @@
 //! Exposes memory info + cleanup commands to the React frontend and manages
 //! the tray icon, automatic cleanup and global hotkeys.
 
+pub mod autostart;
 pub mod cmdline;
 pub mod config;
 pub mod elevation;
@@ -154,6 +155,45 @@ fn notify(app: AppHandle, title: String, body: String, system: Option<bool>) -> 
     }
 
     Ok(())
+}
+
+/// Query whether the silent elevated autostart task is installed.
+#[tauri::command]
+fn get_autostart() -> bool {
+    autostart::is_enabled()
+}
+
+/// Enable or disable the silent elevated autostart task.
+///
+/// Enabling requires elevation (to create a highest-privilege logon task). If
+/// the app is not currently elevated, a single UAC prompt is shown once to
+/// install the task; after that, every logon starts the app elevated & silent.
+#[tauri::command]
+fn set_autostart(enabled: bool) -> Result<String, String> {
+    if enabled {
+        if elevation::is_elevated() {
+            autostart::install()?;
+            Ok("installed".into())
+        } else {
+            // One-shot elevation to create the task (the only UAC prompt).
+            if elevation::relaunch_with_args("-ensure-autostart") {
+                Ok("elevation_requested".into())
+            } else {
+                Err("无法请求管理员权限(UAC 被取消)".into())
+            }
+        }
+    } else {
+        if elevation::is_elevated() {
+            autostart::uninstall()?;
+            Ok("removed".into())
+        } else {
+            if elevation::relaunch_with_args("-disable-autostart") {
+                Ok("elevation_requested".into())
+            } else {
+                Err("无法请求管理员权限(UAC 被取消)".into())
+            }
+        }
+    }
 }
 
 fn unix_now() -> i64 {
@@ -361,6 +401,14 @@ pub fn run() {
 
             let handle = app.handle().clone();
 
+            // Silent autostart: when launched by the logon task (`-startup`),
+            // start minimized to the tray instead of opening the window.
+            if autostart::is_startup_launch() {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.hide();
+                }
+            }
+
             // Handle `-clean` / `-clean:full` command-line action.
             match cmdline::parse() {
                 cmdline::CommandLineAction::CleanDefault => {
@@ -406,6 +454,8 @@ pub fn run() {
             get_config_location,
             get_os_info,
             notify,
+            get_autostart,
+            set_autostart,
             updater::check_for_update,
             updater::download_and_install
         ])

@@ -706,6 +706,32 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.accent-swatches {
+  display: inline-flex;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.swatch:hover {
+  transform: scale(1.12);
+}
+
+.swatch.active {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--surface-solid);
+}
+
 .setrow-label {
   color: var(--text-soft);
   flex: 1;

@@ -93,6 +93,12 @@ pub fn enable_memory_privileges() {
 ///
 /// Returns `true` when the elevation request was successfully submitted.
 pub fn relaunch_as_admin(mask: u32) -> bool {
+    relaunch_with_args(&format!("-clean-once {mask}"))
+}
+
+/// Relaunch the current executable elevated via the UAC `runas` verb with the
+/// given arguments. Used for one-shot elevated helpers (cleanup / install).
+pub fn relaunch_with_args(args: &str) -> bool {
     use windows::Win32::UI::Shell::ShellExecuteW;
     use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
@@ -100,24 +106,21 @@ pub fn relaunch_as_admin(mask: u32) -> bool {
         return false;
     };
 
-    // Build verb "runas" and the argument "-clean-once <mask>".
+    // Build verb "runas" and the argument string.
     let verb: Vec<u16> = "runas".encode_utf16().chain(core::iter::once(0)).collect();
     let exe_wide: Vec<u16> = exe
         .to_string_lossy()
         .encode_utf16()
         .chain(core::iter::once(0))
         .collect();
-    let args: Vec<u16> = format!("-clean-once {mask}")
-        .encode_utf16()
-        .chain(core::iter::once(0))
-        .collect();
+    let args_wide: Vec<u16> = args.encode_utf16().chain(core::iter::once(0)).collect();
 
     unsafe {
         let result = ShellExecuteW(
             None,
             windows::core::PCWSTR(verb.as_ptr()),
             windows::core::PCWSTR(exe_wide.as_ptr()),
-            windows::core::PCWSTR(args.as_ptr()),
+            windows::core::PCWSTR(args_wide.as_ptr()),
             windows::core::PCWSTR::null(),
             SW_HIDE,
         );
