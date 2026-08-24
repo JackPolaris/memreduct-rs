@@ -84,6 +84,12 @@ export default function App() {
     const unlistenAuto = listen("autoclean-done", () => {
       getMemoryInfo().then(setInfo).catch(() => {});
     });
+    const unlistenSettings = listen("open-settings", () => {
+      setTab("settings");
+    });
+    const unlistenAbout = listen("show-about", () => {
+      setTab("main");
+    });
 
     const poll = setInterval(() => {
       getMemoryInfo().then(setInfo).catch(() => {});
@@ -93,6 +99,8 @@ export default function App() {
       clearInterval(poll);
       unlistenMemory.then((fn) => fn());
       unlistenAuto.then((fn) => fn());
+      unlistenSettings.then((fn) => fn());
+      unlistenAbout.then((fn) => fn());
     };
   }, []);
 
@@ -176,6 +184,10 @@ export default function App() {
                   {t("main.notElevated")}
                 </span>
               )}
+              <span className="statusbar-note">
+                {configLocation === "portable" ? t("main.portable") : t("main.appdata")}
+                {osInfo && ` · Win ${osInfo.major}.${osInfo.minor}`} · v3.5.3
+              </span>
             </div>
 
             <section className="hero glass">
@@ -255,20 +267,18 @@ export default function App() {
               {cleaning ? t("main.cleaning") : t("main.cleanMemory")}
             </button>
 
-            {lastResult && (
-              <div className="result">
-                {t("main.released")}{" "}
-                <strong>{formatBytes(lastResult.freed_bytes)}</strong>
-                {lastResult.regions.length > 0 &&
-                  ` · ${lastResult.regions.length} ${t("main.regionsCount")}`}
-              </div>
-            )}
-
-            <footer className="footnote">
-              {t("main.configLocation")}:{" "}
-              {configLocation === "portable" ? t("main.portable") : t("main.appdata")}
-              {osInfo && ` · Win ${osInfo.major}.${osInfo.minor}`} · v3.5.3
-            </footer>
+            <div className="result">
+              {lastResult ? (
+                <>
+                  {t("main.released")}{" "}
+                  <strong>{formatBytes(lastResult.freed_bytes)}</strong>
+                  {lastResult.regions.length > 0 &&
+                    ` · ${lastResult.regions.length} ${t("main.regionsCount")}`}
+                </>
+              ) : (
+                <>&nbsp;</>
+              )}
+            </div>
           </>
         ) : config ? (
           <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} />

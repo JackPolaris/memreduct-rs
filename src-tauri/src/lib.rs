@@ -114,6 +114,14 @@ fn cfg_allow_standby(app: &AppHandle) -> bool {
     app.state::<AppState>().config.lock().unwrap().allow_standby_list_cleanup
 }
 
+/// Clean memory triggered from the tray (double-click / menu).
+pub fn clean_from_tray(app: &AppHandle) {
+    let mask = app.state::<AppState>().config.lock().unwrap().reduct_mask;
+    let allow_standby = cfg_allow_standby(app);
+    let _ = memory::clean_memory(mask, allow_standby, false);
+    let _ = app.emit("memory-update", memory::get_memory_info());
+}
+
 /// Decide whether auto-clean should run based on the current usage percent,
 /// the on/off flags, the threshold, interval and the last-clean timestamp.
 ///
@@ -179,7 +187,13 @@ fn spawn_background(app: AppHandle) {
                 let guard = state.tray.lock().unwrap();
                 if let Some(tray) = guard.as_ref() {
                     let info = memory::get_memory_info();
-                    let _ = tray.set_title(Some(format!("{}%", info.physical_memory.percent)));
+                    let pct = info.physical_memory.percent;
+                    let _ = tray.set_title(Some(format!("{pct}%")));
+                    let _ = tray.set_tooltip(Some(format!(
+                        "Mem Reduct\n内存占用: {pct}%\n已用: {:.1} GB / 共: {:.1} GB",
+                        info.physical_memory.used_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
+                        info.physical_memory.total_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
+                    )));
                 }
             }
 

@@ -103,7 +103,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px 8px;
+  padding: 10px 16px 6px;
   flex-shrink: 0;
 }
 
@@ -166,10 +166,10 @@ body {
 /* ===== Content ===== */
 .content {
   flex: 1;
-  padding: 6px 16px 14px;
+  padding: 4px 14px 10px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   overflow-y: auto;
   min-height: 0;
 }
@@ -220,13 +220,19 @@ body {
 .statuschip.warn { color: var(--warning); }
 .statuschip.crit { color: var(--danger); }
 
+.statusbar-note {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
 /* ===== Hero ===== */
 .hero {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   align-items: stretch;
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 14px;
   flex-shrink: 0;
 }
 
@@ -237,8 +243,8 @@ body {
 }
 
 .gauge {
-  width: 148px;
-  height: 148px;
+  width: 136px;
+  height: 136px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -248,15 +254,15 @@ body {
 .gauge::before {
   content: "";
   position: absolute;
-  inset: -7px;
+  inset: -6px;
   border-radius: 50%;
   background: radial-gradient(closest-side, transparent 72%, var(--accent-glow) 100%);
   opacity: 0.8;
 }
 
 .gauge-inner {
-  width: 115px;
-  height: 115px;
+  width: 106px;
+  height: 106px;
   border-radius: 50%;
   background: var(--surface-solid);
   border: 1px solid var(--border);
@@ -269,20 +275,20 @@ body {
 }
 
 .gauge-value {
-  font-size: 32px;
+  font-size: 29px;
   font-weight: 800;
   line-height: 1;
   letter-spacing: -1px;
 }
 
 .gauge-label {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--muted);
   margin-top: 2px;
 }
 
 .gauge-sub {
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--muted);
   opacity: 0.8;
 }
@@ -367,7 +373,7 @@ body {
 /* ===== Regions panel ===== */
 .panel {
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 12px;
   flex-shrink: 0;
 }
 
@@ -375,41 +381,41 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .panel-title {
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-soft);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 }
 
 .panel-count {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--muted);
   background: var(--surface2);
   border: 1px solid var(--border);
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 999px;
 }
 
 .region-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
+  gap: 5px;
 }
 
 .region {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 10px;
-  border-radius: 10px;
+  gap: 8px;
+  padding: 6px 9px;
+  border-radius: 9px;
   background: var(--surface2);
   border: 1px solid var(--border);
   cursor: pointer;
@@ -471,9 +477,9 @@ body {
   border: none;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color: #fff;
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
-  padding: 13px;
+  padding: 12px;
   border-radius: var(--radius-sm);
   box-shadow: 0 10px 24px var(--accent-glow);
   cursor: pointer;
@@ -554,14 +560,15 @@ body {
 .result {
   text-align: center;
   color: var(--text-soft);
-  font-size: 13px;
-  padding: 4px 0;
+  font-size: 12.5px;
+  min-height: 18px;
+  line-height: 18px;
   flex-shrink: 0;
 }
 
 .result strong {
   color: var(--accent);
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .footnote {
