@@ -123,40 +123,148 @@ pub fn render(percent: u32, style: &TrayIconStyle) -> Vec<u8> {
 }
 
 /// Classify a pixel: inside background shape, and whether it's border.
+///
+/// The border is computed as the difference between the outer rounded rect and
+/// an inner rounded rect shrunk by `BORDER`, so all four corners get a border
+/// arc too (not just the four straight edges).
 fn classify(x: usize, y: usize, round: bool, border: bool) -> (bool, bool) {
-    let inside = if round { in_rounded(x, y) } else { true };
-    if !inside {
-        return (false, false);
-    }
-    let is_border = border && is_border_pixel(x, y);
-    // Background is inside minus the border ring.
-    let on_bg = !is_border;
-    (on_bg, is_border)
-}
-
-fn in_rounded(x: usize, y: usize) -> bool {
-    let cx = x as isize;
-    let cy = y as isize;
-    if cx < 0 || cy < 0 || cx >= SIZE as isize || cy >= SIZE as isize {
-        return false;
-    }
-    let r = RADIUS;
-    let left = cx < r;
-    let right = cx >= (SIZE as isize - r);
-    let top = cy < r;
-    let bottom = cy >= (SIZE as isize - r);
-    if (top || bottom) && (left || right) {
-        let corner_x = if left { r } else { SIZE as isize - 1 - r };
-        let corner_y = if top { r } else { SIZE as isize - 1 - r };
-        let dx = cx - corner_x;
-        let dy = cy - corner_y;
-        dx * dx + dy * dy <= r * r
+    let inside_outer = if round {
+        in_rounded_rect(x, y, 0, 0, SIZE - 1, SIZE - 1, RADIUS)
     } else {
         true
+    };
+
+    if !inside_outer {
+        return (false, false);
     }
+
+    if !border {
+        return (true, false);
+    }
+
+    let inner_r = if round {
+        (RADIUS - BORDER as isize).max(0)
+    } else {
+        0
+    };
+
+    let is_border = if round {
+        // Border = outer rounded rect minus inner rounded rect.
+        !in_rounded_rect(
+            x,
+            y,
+            BORDER,
+            BORDER,
+            SIZE - 1 - BORDER,
+            SIZE - 1 - BORDER,
+            inner_r,
+        )
+    } else {
+        x < BORDER || y < BORDER || x >= SIZE - BORDER || y >= SIZE - BORDER
+    };
+
+    (true, is_border)
 }
 
-/// A pixel belongs to the border ring (contiguous thickness).
-fn is_border_pixel(x: usize, y: usize) -> bool {
-    x < BORDER || y < BORDER || x >= SIZE - BORDER || y >= SIZE - BORDER
+/// True when pixel (x, y) lies inside a rounded rectangle whose edges are at
+/// `left`/`top`/`right`/`bottom` (inclusive) and whose corner radius is `r`.
+fn in_rounded_rect(
+    x: usize,
+    y: usize,
+    left: usize,
+    top: usize,
+    right: usize,
+    bottom: usize,
+    r: isize,
+) -> bool {
+    let cx = x as isize;
+    let cy = y as isize;
+    let li = left as isize;
+    let ti = top as isize;
+    let ri = right as isize;
+    let bi = bottom as isize;
+
+    if cx < li || cy < ti || cx > ri || cy > bi {
+        return false;
+    }
+    if r <= 0 {
+        return true;
+    }
+
+    let in_tl = cx < li + r && cy < ti + r;
+    let in_tr = cx > ri - r && cy < ti + r;
+    let in_bl = cx < li + r && cy > bi - r;
+    let in_br = cx > ri - r && cy > bi - r;
+
+    if !(in_tl || in_tr || in_bl || in_br) {
+        return true;
+    }
+
+    // Distance from the corner center.
+    let (corner_x, corner_y) = if in_tl {
+        (li + r, ti + r)
+    } else if in_tr {
+        (ri - r, ti + r)
+    } else if in_bl {
+        (li + r, bi - r)
+    } else {
+        (ri - r, bi - r)
+    };
+
+    let dx = cx - corner_x;
+    let dy = cy - corner_y;
+    dx * dx + dy * dy <= r * r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rounded_border_has_all_four_edges_and_corners() {
+        // Top edge (non-corner) is border.
+        assert_eq!(classify(16, 0, true, true), (true, true));
+        // Left edge.
+        assert_eq!(classify(0, 16, true, true), (true, true));
+        // Right edge.
+        assert_eq!(classify(SIZE - 1, 16, true, true), (true, true));
+        // Bottom edge.
+        assert_eq!(classify(16, SIZE - 1, true, true), (true, true));
+
+        // Top-left corner arc: distance from corner centre (7,7) must be in
+        // [RADIUS-BORDER, RADIUS] — point (3,3) has d≈5.66.
+        assert!(
+            classify(3, 3, true, true).1,
+            "top-left corner should be border"
+        );
+
+        // Top-right / bottom-left / bottom-right corner arcs.
+        assert!(
+            classify(28, 3, true, true).1,
+            "top-right corner should be border"
+        );
+        assert!(
+            classify(3, 28, true, true).1,
+            "bottom-left corner should be border"
+        );
+        assert!(
+            classify(28, 28, true, true).1,
+            "bottom-right corner should be border"
+        );
+
+        // Center is background, not border.
+        assert_eq!(classify(16, 16, true, true), (true, false));
+
+        // Outside the rounded shape (extreme corner) is empty.
+        assert_eq!(classify(0, 0, true, true), (false, false));
+    }
+
+    #[test]
+    fn plain_border_has_four_edges() {
+        assert_eq!(classify(16, 0, false, true), (true, true));
+        assert_eq!(classify(0, 16, false, true), (true, true));
+        assert_eq!(classify(SIZE - 1, 16, false, true), (true, true));
+        assert_eq!(classify(16, SIZE - 1, false, true), (true, true));
+        assert_eq!(classify(16, 16, false, true), (true, false));
+    }
 }
