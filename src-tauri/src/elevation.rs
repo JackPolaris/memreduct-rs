@@ -68,6 +68,16 @@ pub fn relaunch_as_admin() -> bool {
 
 /// Startup elevation check: if not elevated, relaunch via UAC and exit.
 pub fn ensure_elevated_or_exit() {
+    // Skip in debug builds (e.g. `tauri dev`) — the self-relaunch would kill
+    // the dev session and appear as a "flash crash". Release builds still
+    // request elevation as before.
+    if cfg!(debug_assertions) {
+        return;
+    }
+    // Manual override for testing (MEMREDUCT_NO_ELEVATE=1).
+    if std::env::var("MEMREDUCT_NO_ELEVATE").is_ok() {
+        return;
+    }
     if is_elevated() {
         return;
     }
