@@ -79,5 +79,11 @@ cd src-tauri && cargo test
 npm run tauri build
 ```
 
+> **重要**：要直接运行单个 `src-tauri/target/release/mem-reduct.exe`（不依赖 npm/vite），
+> 必须用 `npm run tauri build`（会启用 `custom-protocol` 并内嵌前端资产）。
+> 千万别用 `cargo build --release`——那样 exe 会去连开发服务器 `http://localhost:1420`，
+> 在没有 vite 时窗口会显示“无法连接”。`tauri build` 还负责把
+> `requireAdministrator` 的 UAC manifest 写进 exe（release 构建）。
+
 > 完整复刻的清理动作需**管理员权限**（原版同样如此）。
 > 原版项目为 GPL-3.0 许可，使用/衍生分发时请遵守相应开源许可。
