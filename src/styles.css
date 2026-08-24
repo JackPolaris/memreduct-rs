@@ -23,6 +23,8 @@
   --accent-2: #06c37a;
   --accent-soft: rgba(11, 157, 94, 0.12);
   --accent-glow: rgba(11, 157, 94, 0.28);
+  /* Same-hue vertical gradient: accent → slightly darker accent */
+  --accent-grad: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 74%, #000));
   --danger: #ef4444;
   --danger-soft: rgba(239, 68, 68, 0.12);
   --warning: #f59e0b;
@@ -59,6 +61,7 @@ body.dark {
   --accent-2: #06b573;
   --accent-soft: rgba(33, 201, 138, 0.16);
   --accent-glow: rgba(33, 201, 138, 0.35);
+  --accent-grad: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 74%, #000));
   --danger: #f87171;
   --danger-soft: rgba(248, 113, 113, 0.16);
   --warning: #fbbf24;
@@ -120,7 +123,7 @@ body {
   border-radius: 10px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent-grad);
   box-shadow: 0 6px 16px var(--accent-glow);
   color: #fff;
 }
@@ -372,7 +375,7 @@ body {
 .bar-fill {
   height: 100%;
   border-radius: 2px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 86%, #fff), var(--accent));
   transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -450,7 +453,7 @@ body {
 }
 
 .region.on .check {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent-grad);
   border-color: transparent;
   box-shadow: 0 3px 8px var(--accent-glow);
 }
@@ -484,7 +487,7 @@ body {
 /* ===== Clean button ===== */
 .clean-btn {
   border: none;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent-grad);
   color: #fff;
   font-size: 14.5px;
   font-weight: 700;
@@ -554,7 +557,7 @@ body {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent-grad);
   color: #fff;
   border: none;
   font-weight: 600;
@@ -805,7 +808,7 @@ body {
 }
 
 .switch input:checked + .track {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--accent-grad);
 }
 
 .switch input:checked + .track + .thumb,

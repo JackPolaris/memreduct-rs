@@ -98,3 +98,33 @@ pub async fn download_and_install(app: AppHandle) -> Result<(), String> {
         .await
         .map_err(|e| format!("下载/安装更新失败: {e}"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_release_parses_manifest() {
+        // Use the REAL manifest content downloaded from GitHub (verbatim).
+        let raw = r#"{
+  "version": "3.5.4",
+  "notes": "Mem Reduct 3.5.4\n\n- 测试更新功能",
+  "pub_date": "2026-08-24T17:50:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TXZHVklvR2pyS216ZFRqUi85QVlkWkZhbEVsMjJ4Wm40TVFzTzRKVElOVERQTFNkTWVpc2QwWjJYR2diRnJSZmVuSHhuR04wTFZwYm93aUVQT3ZIbkFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NTkzODI5CWZpbGU6TWVtIFJlZHVjdF8zLjUuNF94NjQtc2V0dXAuZXhlCmd4c1NtQXhSTVFwTnFaWkJneTBER2l1ZlZjVVcvcjlmMVRkL0VLR1lHOE5ZNnI2LzJEcVZUVDA3ZGNOYWc3ZnJBZ0lPVFlHcDBNc1FVNW12SGRyZkN3PT0K",
+      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.4/Mem.Reduct_3.5.4_x64-setup.exe"
+    }
+  }
+}"#;
+        let v: serde_json::Value = serde_json::from_str(raw).expect("json should be valid");
+        match serde_json::from_value::<tauri_plugin_updater::RemoteRelease>(v) {
+            Ok(release) => {
+                println!("parsed OK, version={}", release.version);
+            }
+            Err(e) => {
+                panic!("RemoteRelease parse FAILED: {e:#}");
+            }
+        }
+    }
+}
