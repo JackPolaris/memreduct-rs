@@ -504,21 +504,45 @@ function SettingsPanel({
     getAutostart().then(setAutostartState).catch(() => {});
   }, []);
 
-  const toggleAutostart = async (enabled: boolean) => {
-    try {
-      const status = await setAutostart(enabled);
-      if (status === "elevation_requested") {
-        // The UAC prompt was shown; re-read the actual state shortly after.
-        setTimeout(() => {
-          getAutostart().then(setAutostartState).catch(() => {});
-        }, 2500);
-      } else {
-        setAutostartState(enabled);
-      }
-    } catch (e) {
-      notify(t("settings.autostart"), String(e), true).catch(() => {});
-      getAutostart().then(setAutostartState).catch(() => {});
-    }
+  // Poll the scheduled-task state until it settles (used after the UAC prompt
+  // is shown — the elevated helper writes the task asynchronously).
+  const pollAutostart = () => {
+    let tries = 0;
+    const timer = setInterval(() => {
+      getAutostart()
+        .then((cur) => {
+          setAutostartState(cur);
+          tries += 1;
+          // Stop as soon as the task exists (enabled) or after ~6s.
+          if (cur || tries >= 20) {
+            clearInterval(timer);
+          }
+        })
+        .catch(() => {
+          tries += 1;
+          if (tries >= 20) clearInterval(timer);
+        });
+    }, 300);
+  };
+
+  const toggleAutostart = (enabled: boolean) => {
+    // Optimistic UI: flip the switch immediately, then reconcile in background.
+    setAutostartState(enabled);
+    setAutostart(enabled)
+      .then((status) => {
+        if (status === "elevation_requested") {
+          // UAC prompt was shown; poll until the task state lands.
+          pollAutostart();
+        } else {
+          // Task created/removed synchronously: confirm the final state.
+          setAutostartState(status === "installed");
+        }
+      })
+      .catch(() => {
+        // Roll back on failure and re-read the truth.
+        setAutostartState(!enabled);
+        getAutostart().then(setAutostartState).catch(() => {});
+      });
   };
 
   const set = <K extends keyof Config>(k: K, v: Config[K]) => {
