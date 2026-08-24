@@ -1,11 +1,11 @@
 {
-  "version": "3.5.5",
-  "notes": "Mem Reduct 3.5.5\n\n- 全新蓝色应用图标\n- 修复检查更新报错(更新链路完整打通)\n- 通知条顶部居中磨砂玻璃胶囊\n- 主题色同色微渐变\n- 托盘关于跳转、开机自启体验优化",
-  "pub_date": "2026-08-24T19:10:00Z",
+  "version": "3.5.6",
+  "notes": "Mem Reduct 3.5.6\n\n- 更新功能测试版本",
+  "pub_date": "2026-08-24T19:20:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TW5pZEw4Z0xDOFNPdlhkQjBYN0VOeDZhWjAzZVJia0tTR2pwbHhTUzdPam1HNW13ZG9XOHpIcGxOaVJoVzJEMHJtSDVvcXZWMzN1ZUtPa3Jpazc3UHc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NTk3MTUwCWZpbGU6TWVtIFJlZHVjdF8zLjUuNV94NjQtc2V0dXAuZXhlCjJiV1M3eWZGL2RKd1ZuU3pEM0NOcSszWW1vS1gzamlOL3VoK3d1dDg3cjNMU2h2OEs4QXJ1U0c1ZzVmT3dIdzBLNlViWDVTeVZXam1tMmpzZ0pTeEJBPT0K",
-      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.5/Mem.Reduct_3.5.5_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TWxiUE9HYjNsUWJEWDZKa1RxWXJGSGkyME9VUEk1OHZMazYvM01TS1RJVTRnWFpBVW1TKzJ0MCtBUEFhb2IzMTc4MzdDcmQxamdzMDdiRXJGVFJpemc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NTk4MjIyCWZpbGU6TWVtIFJlZHVjdF8zLjUuNl94NjQtc2V0dXAuZXhlCm9jNnh5VjhVNSt5bTQvZ3Z2UDZJckhZaXZadzMrVVRVTWgwTi9hZklZajZ0WUpVWWZjeURWTGdYbktHYmxLNWpQZWVSZlUxM09mVzFRZzZ1R0dPVEJ3PT0K",
+      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.6/Mem.Reduct_3.5.6_x64-setup.exe"
     }
   }
 }
