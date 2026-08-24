@@ -29,7 +29,34 @@ fn main() {
         return;
     }
 
-    // --- Normal app launch ---
+    // --- Normal app launch with permanent on-demand elevation ---
     mem_reduct_lib::elevation::enable_memory_privileges();
+
+    // Skip elevation logic when already elevated (e.g. launched by the task).
+    if mem_reduct_lib::elevation::is_elevated() {
+        mem_reduct_lib::run();
+        return;
+    }
+
+    // Not elevated. Two cases:
+    // 1) The elevated task already exists → silently trigger it and exit
+    //    (no UAC, the elevated instance takes over).
+    // 2) No task yet → this is the first launch: create the task via a single
+    //    UAC prompt (unless the user previously declined).
+    if mem_reduct_lib::autostart::is_enabled() {
+        let _ = mem_reduct_lib::autostart::run_task();
+        return;
+    }
+
+    let mut cfg = mem_reduct_lib::config::load();
+    if !cfg.elevation_attempted {
+        cfg.elevation_attempted = true;
+        let _ = mem_reduct_lib::config::save(&cfg);
+        // First launch: one UAC prompt to persist elevation forever.
+        let _ = mem_reduct_lib::elevation::relaunch_with_args("-ensure-autostart");
+        return;
+    }
+
+    // User declined elevation before: run normally without admin rights.
     mem_reduct_lib::run()
 }

@@ -584,21 +584,7 @@ function SettingsPanel({
               <Toggle label={t("settings.autoCheck")} icon={<IconSparkles size={15} />} checked={draft.check_updates} onChange={(v) => set("check_updates", v)} />
               <div className="setrow">
                 <span className="setrow-label">{t("settings.updateRepo")}</span>
-                <input
-                  className="textinput"
-                  placeholder="owner/repo"
-                  value={draft.update_repo}
-                  onChange={(e) => set("update_repo", e.target.value)}
-                />
-              </div>
-              <div className="setrow">
-                <span className="setrow-label">{t("settings.updatePubkey")}</span>
-                <input
-                  className="textinput"
-                  placeholder="(可选)签名公钥"
-                  value={draft.update_pubkey}
-                  onChange={(e) => set("update_pubkey", e.target.value)}
-                />
+                <span className="setrow-value">{draft.update_repo}</span>
               </div>
               <div className="setrow">
                 <span className="setrow-label">{t("settings.autoUpdate")}</span>

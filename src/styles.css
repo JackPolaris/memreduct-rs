@@ -746,6 +746,17 @@ body {
   flex-shrink: 0;
 }
 
+.setrow-value {
+  color: var(--text-soft);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12.5px;
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 4px 9px;
+  flex-shrink: 0;
+}
+
 /* modern toggle switch */
 .switch {
   position: relative;

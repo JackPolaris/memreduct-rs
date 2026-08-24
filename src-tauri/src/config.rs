@@ -67,10 +67,14 @@ pub struct Config {
     pub balloon_clean_results: bool,
     pub log_clean_results: bool,
 
-    // Updater (GitHub repository like "owner/repo"; empty = not configured)
+    // Updater (hardcoded to the official repository).
     pub update_repo: String,
     // Updater signing public key; empty = verification not possible
     pub update_pubkey: String,
+
+    // True once we attempted the first-launch elevation prompt (so we don't
+    // re-prompt on every launch if the user declined once).
+    pub elevation_attempted: bool,
 
     // Statistics
     pub statistic_last_reduct: i64,
@@ -119,8 +123,10 @@ impl Default for Config {
             balloon_clean_results: true,
             log_clean_results: false,
 
-            update_repo: String::new(),
+            update_repo: "JackPolaris/memreduct-rs".into(),
             update_pubkey: String::new(),
+
+            elevation_attempted: false,
 
             statistic_last_reduct: 0,
         }

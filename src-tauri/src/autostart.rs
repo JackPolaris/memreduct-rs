@@ -67,6 +67,22 @@ pub fn is_startup_launch() -> bool {
     std::env::args().any(|a| a == STARTUP_ARG)
 }
 
+/// Silently start the scheduled task (no UAC prompt). Used when the user
+/// launched the app manually but elevation is already persisted via the
+/// task: we trigger the elevated instance and the current one exits.
+pub fn run_task() -> Result<(), String> {
+    let status = Command::new("schtasks.exe")
+        .args(["/run", "/tn", TASK_NAME])
+        .status()
+        .map_err(|e| e.to_string())?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("schtasks /run 退出码: {status}"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

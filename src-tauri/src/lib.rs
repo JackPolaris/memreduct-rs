@@ -133,16 +133,12 @@ fn get_os_info() -> OsInfo {
     }
 }
 
-/// Show a notification: emits an in-app toast event and (if requested) a
-/// native system notification via tauri-plugin-notification.
+/// Show a native system notification via tauri-plugin-notification.
+///
+/// The frontend independently renders its own in-app toast, so this command
+/// must NOT emit "app-toast" again — otherwise every message shows twice.
 #[tauri::command]
 fn notify(app: AppHandle, title: String, body: String, system: Option<bool>) -> Result<(), String> {
-    // In-app floating toast.
-    let _ = app.emit(
-        "app-toast",
-        serde_json::json!({ "title": title, "body": body }),
-    );
-
     // Native system notification (Windows toast / macOS / Linux).
     if system.unwrap_or(true) {
         use tauri_plugin_notification::NotificationExt;
