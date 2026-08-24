@@ -14,6 +14,7 @@ import {
   getVersion,
   isElevated,
   notify,
+  openExternal,
   saveConfig,
   setAutostart,
   type CleanResult,
@@ -31,6 +32,7 @@ import {
   IconChip,
   IconDrive,
   IconGauge,
+  IconInfo,
   IconKeyboard,
   IconPalette,
   IconSettings,
@@ -484,7 +486,7 @@ function RegionCard({
   );
 }
 
-type Section = "general" | "memory" | "appearance" | "tray" | "advanced";
+type Section = "general" | "memory" | "appearance" | "tray" | "advanced" | "about";
 
 function SettingsPanel({
   config,
@@ -557,6 +559,7 @@ function SettingsPanel({
     { id: "appearance", icon: <IconPalette size={14} /> },
     { id: "tray", icon: <IconTray size={14} /> },
     { id: "advanced", icon: <IconKeyboard size={14} /> },
+    { id: "about", icon: <IconInfo size={14} /> },
   ];
 
   return (
@@ -582,19 +585,6 @@ function SettingsPanel({
               <Toggle label={t("settings.autostart")} icon={<IconBolt size={15} />} checked={autostart} onChange={toggleAutostart} />
               <div className="hint">{t("settings.autostartHint")}</div>
               <Toggle label={t("settings.showCleanConfirmation")} icon={<IconSparkles size={15} />} checked={draft.show_reduct_confirmation} onChange={(v) => set("show_reduct_confirmation", v)} />
-              <div className="setrow">
-                <span className="setrow-label">
-                  <span className="icon"><IconSparkles size={15} /></span>
-                  {t("settings.checkUpdates")}
-                </span>
-                <button className="chipbtn" onClick={() => runUpdateCheck()}>
-                  {t("settings.checkNow")}
-                </button>
-              </div>
-              <div className="setrow">
-                <span className="setrow-label">{t("settings.version")}</span>
-                <span className="setrow-value">v{version}</span>
-              </div>
               <div className="setrow">
                 <span className="setrow-label">
                   <span className="icon"><IconDrive size={15} /></span>
@@ -699,6 +689,38 @@ function SettingsPanel({
                   <HotkeyRecorder value={draft.hotkey_clean} onChange={(v) => set("hotkey_clean", v)} />
                 </div>
               )}
+            </>
+          )}
+
+          {section === "about" && (
+            <>
+              <div className="setrow">
+                <span className="setrow-label">
+                  <span className="icon"><IconSparkles size={15} /></span>
+                  {t("settings.checkUpdates")}
+                </span>
+                <button className="chipbtn" onClick={() => runUpdateCheck()}>
+                  {t("settings.checkNow")}
+                </button>
+              </div>
+              <div className="setrow">
+                <span className="setrow-label">{t("settings.version")}</span>
+                <span className="setrow-value">v{version}</span>
+              </div>
+              <div className="setrow">
+                <span className="setrow-label">
+                  <span className="icon"><IconInfo size={15} /></span>
+                  {t("about.website")}
+                </span>
+                <a
+                  className="link"
+                  href="https://github.com/JackPolaris/memreduct-rs"
+                  onClick={(e) => { e.preventDefault(); openExternal("https://github.com/JackPolaris/memreduct-rs").catch(() => {}); }}
+                >
+                  github.com/JackPolaris/memreduct-rs
+                </a>
+              </div>
+              <div className="hint">{t("about.license")}</div>
             </>
           )}
         </div>

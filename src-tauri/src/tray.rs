@@ -124,7 +124,7 @@ fn handle_menu(app: &AppHandle, id: &str) {
             }
         }
         menu_id::WEBSITE => {
-            let _ = open_url("https://github.com/henrypp/memreduct");
+            let _ = open_url("https://github.com/JackPolaris/memreduct-rs");
         }
         menu_id::ABOUT => {
             let _ = app.emit("show-about", ());

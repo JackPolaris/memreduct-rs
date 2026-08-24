@@ -63,7 +63,6 @@
     "showCleanConfirmation": "清理前確認",
     "checkUpdates": "檢查更新",
     "checkNow": "檢查更新",
-    "checkUpdates": "檢查更新",
     "installNow": "下載安裝",
     "updateInstalling": "發現新版本，正在背景下載並安裝…",
     "autoCheck": "啟動時自動檢查更新",
@@ -101,7 +100,8 @@
     "logCleanResults": "記錄清理結果",
     "hotkeyClean": "全域清理熱鍵",
     "hotkeyHint": "預設熱鍵：Ctrl+F1（可在應用程式內修改）",
-    "hotkeyCombo": "熱鍵組合"
+    "hotkeyCombo": "熱鍵組合",
+    "about": "關於"
   },
   "regions": {
     "workingSet": "工作集",
@@ -118,5 +118,9 @@
     "manual": "手動清理",
     "hotkey": "熱鍵清理",
     "cmdline": "命令列清理"
+  },
+  "about": {
+    "website": "專案主頁",
+    "license": "本專案基於 GPL-3.0 許可開源。"
   }
 }

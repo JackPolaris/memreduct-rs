@@ -61,9 +61,8 @@
     "autostartHint": "Prompt UAC once to create a scheduled task; afterwards every logon starts the app elevated & silent, so cleanup works without further UAC prompts.",
     "accentColor": "Accent color",
     "showCleanConfirmation": "Show clean confirmation",
-    "checkUpdates": "Check updates",
-    "checkNow": "Check for updates",
     "checkUpdates": "Check for updates",
+    "checkNow": "Check for updates",
     "installNow": "Download & install",
     "updateInstalling": "New version found, downloading & installing in the background…",
     "autoCheck": "Check for updates on startup",
@@ -101,7 +100,8 @@
     "logCleanResults": "Log clean results",
     "hotkeyClean": "Global clean hotkey",
     "hotkeyHint": "Default hotkey: Ctrl+F1 (change in app)",
-    "hotkeyCombo": "Hotkey combo"
+    "hotkeyCombo": "Hotkey combo",
+    "about": "About"
   },
   "regions": {
     "workingSet": "Working Set",
@@ -118,5 +118,9 @@
     "manual": "Manual",
     "hotkey": "Hotkey",
     "cmdline": "Command-line"
+  },
+  "about": {
+    "website": "Project page",
+    "license": "Open source under the GPL-3.0 license."
   }
 }

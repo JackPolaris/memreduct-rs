@@ -123,3 +123,13 @@ export function IconSparkles({ size, className }: IconProps) {
     </svg>
   );
 }
+
+export function IconInfo({ size, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5" />
+      <path d="M12 8h.01" />
+    </svg>
+  );
+}

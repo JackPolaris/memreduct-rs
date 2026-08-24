@@ -100,6 +100,7 @@ export const saveConfig = (config: Config) =>
 export const getConfigLocation = () => invoke<string>("get_config_location");
 export const getOsInfo = () => invoke<OsInfo>("get_os_info");
 export const getVersion = () => invoke<string>("get_version");
+export const openExternal = (url: string) => invoke<void>("open_external", { url });
 export const getAutostart = () => invoke<boolean>("get_autostart");
 export const setAutostart = (enabled: boolean) =>
   invoke<string>("set_autostart", { enabled });

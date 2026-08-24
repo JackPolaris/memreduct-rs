@@ -134,6 +134,33 @@ fn get_version(app: AppHandle) -> String {
     app.package_info().version.to_string()
 }
 
+/// Open an external URL in the default browser.
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let wide: Vec<u16> = url.encode_utf16().chain(core::iter::once(0)).collect();
+    static OPEN: [u16; 5] = [0x6f, 0x70, 0x65, 0x6e, 0x00]; // "open\0"
+
+    unsafe {
+        let r = ShellExecuteW(
+            None,
+            PCWSTR(OPEN.as_ptr()),
+            PCWSTR(wide.as_ptr()),
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        );
+        if r.0 as isize > 32 {
+            Ok(())
+        } else {
+            Err("打开链接失败".into())
+        }
+    }
+}
+
 /// Show a native system notification via tauri-plugin-notification.
 ///
 /// The frontend independently renders its own in-app toast, so this command
@@ -449,6 +476,7 @@ pub fn run() {
             get_autostart,
             set_autostart,
             get_version,
+            open_external,
             updater::check_for_update,
             updater::download_and_install
         ])

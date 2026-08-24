@@ -49,12 +49,17 @@
     "clean": "确认清理",
     "cancel": "取消"
   },
+  "about": {
+    "website": "项目主页",
+    "license": "本项目基于 GPL-3.0 许可开源。"
+  },
   "settings": {
     "general": "常规",
     "memory": "内存",
     "appearance": "外观",
     "tray": "托盘",
     "advanced": "高级",
+    "about": "关于",
     "alwaysOnTop": "窗口置顶",
     "startMinimized": "启动时最小化",
     "autostart": "开机静默自启(管理员权限)",

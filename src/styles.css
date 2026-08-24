@@ -757,6 +757,18 @@ body {
   flex-shrink: 0;
 }
 
+.link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 12.5px;
+  cursor: pointer;
+  word-break: break-all;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
 /* modern toggle switch */
 .switch {
   position: relative;
