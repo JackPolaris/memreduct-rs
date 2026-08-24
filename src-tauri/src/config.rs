@@ -62,6 +62,11 @@ pub struct Config {
     pub balloon_clean_results: bool,
     pub log_clean_results: bool,
 
+    // Updater (GitHub repository like "owner/repo"; empty = not configured)
+    pub update_repo: String,
+    // Updater signing public key; empty = verification not possible
+    pub update_pubkey: String,
+
     // Statistics
     pub statistic_last_reduct: i64,
 }
@@ -106,6 +111,9 @@ impl Default for Config {
             notifications_sound: true,
             balloon_clean_results: true,
             log_clean_results: false,
+
+            update_repo: String::new(),
+            update_pubkey: String::new(),
 
             statistic_last_reduct: 0,
         }

@@ -61,6 +61,9 @@ export interface Config {
   balloon_clean_results: boolean;
   log_clean_results: boolean;
 
+  update_repo: string;
+  update_pubkey: string;
+
   statistic_last_reduct: number;
 }
 
@@ -78,36 +81,18 @@ export const cleanMemory = (mask: number, source: string) =>
 export const notify = (title: string, body: string, system = true) =>
   invoke<void>("notify", { title, body, system });
 
-// Check the latest release from GitHub (uses the public API directly).
-export async function checkForUpdates(): Promise<{ latest: string; current: string; hasUpdate: boolean; error: boolean }> {
-  const current = "3.5.3";
-  try {
-    const resp = await fetch(
-      "https://api.github.com/repos/henrypp/memreduct/releases/latest",
-      { headers: { Accept: "application/vnd.github+json" } }
-    );
-    if (!resp.ok) throw new Error(String(resp.status));
-    const data = await resp.json();
-    const latest = String(data.tag_name || "").replace(/^v\.?\s*|^V\.?\s*/i, "");
-    const hasUpdate = latest !== "" && cmpVersion(latest, current) > 0;
-    return { latest, current, hasUpdate, error: false };
-  } catch (e) {
-    return { latest: "", current, hasUpdate: false, error: true };
-  }
+// Automatic update via tauri-plugin-updater (source configurable in Settings).
+export interface UpdateInfo {
+  available: boolean;
+  version: string;
+  date: string;
+  body: string;
+  current_version: string;
 }
-
-// Compare two "x.y.z" version strings: >0 if a>b, <0 if a<b, 0 if equal.
-// Non-numeric parts are treated as 0.
-function cmpVersion(a: string, b: string): number {
-  const pa = (a || "0").split(/[.+-]/).map((n) => parseInt(n, 10) || 0);
-  const pb = (b || "0").split(/[.+-]/).map((n) => parseInt(n, 10) || 0);
-  const len = Math.max(pa.length, pb.length);
-  for (let i = 0; i < len; i++) {
-    const d = (pa[i] || 0) - (pb[i] || 0);
-    if (d !== 0) return d;
-  }
-  return 0;
-}
+export const checkForUpdate = (repo: string, pubkey: string) =>
+  invoke<UpdateInfo>("check_for_update", { repo, pubkey });
+export const downloadAndInstall = (repo: string, pubkey: string) =>
+  invoke<void>("download_and_install", { repo, pubkey });
 export const getConfig = () => invoke<Config>("get_config");
 export const saveConfig = (config: Config) =>
   invoke<void>("save_config", { config });

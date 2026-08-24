@@ -3,8 +3,9 @@ import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import i18n from "./i18n";
 import {
-  checkForUpdates,
+  checkForUpdate,
   cleanMemory,
+  downloadAndInstall,
   getConfig,
   getConfigLocation,
   getMemoryInfo,
@@ -101,6 +102,16 @@ export default function App() {
       setSelectedMask(c.reduct_mask);
       if (c.language && c.language !== i18n.language) {
         i18n.changeLanguage(c.language);
+      }
+      // Startup auto-update check (if enabled and a repo is configured).
+      if (c.check_updates && c.update_repo.trim()) {
+        checkForUpdate(c.update_repo, c.update_pubkey)
+          .then((r) => {
+            if (r.available) {
+              pushToast(t("settings.updateAvailable"), `v${r.version}`, "info");
+            }
+          })
+          .catch(() => {});
       }
     });
 
@@ -452,6 +463,27 @@ function SettingsPanel({
     });
   };
 
+  const runUpdateCheck = async (c: Config) => {
+    try {
+      const r = await checkForUpdate(c.update_repo, c.update_pubkey);
+      if (r.available) {
+        notify(t("settings.updateAvailable"), `v${r.version}`, true).catch(() => {});
+      } else {
+        notify(t("settings.updateNone"), `${t("settings.version")} ${r.current_version}`, true).catch(() => {});
+      }
+    } catch (e) {
+      notify(t("settings.updateError"), String(e), true).catch(() => {});
+    }
+  };
+
+  const runUpdateInstall = async (c: Config) => {
+    try {
+      await downloadAndInstall(c.update_repo, c.update_pubkey);
+    } catch (e) {
+      notify(t("settings.updateError"), String(e), true).catch(() => {});
+    }
+  };
+
   const sections: { id: Section; icon: React.ReactNode }[] = [
     { id: "general", icon: <IconSettings size={14} /> },
     { id: "memory", icon: <IconBolt size={14} /> },
@@ -482,28 +514,38 @@ function SettingsPanel({
             <>
               <Toggle label={t("settings.alwaysOnTop")} icon={<IconSettings size={15} />} checked={draft.always_on_top} onChange={(v) => set("always_on_top", v)} />
               <Toggle label={t("settings.showCleanConfirmation")} icon={<IconSparkles size={15} />} checked={draft.show_reduct_confirmation} onChange={(v) => set("show_reduct_confirmation", v)} />
-              <div className="setrow">
-                <span className="setrow-label">
-                  <span className="icon"><IconSparkles size={15} /></span>
-                  {t("settings.checkUpdates")}
-                </span>
-                <button
-                  className="chipbtn"
-                  onClick={async () => {
-                    const r = await checkForUpdates();
-                    if (r.error) {
-                      notify(t("settings.updateError"), "", true).catch(() => {});
-                    } else if (r.hasUpdate) {
-                      notify(t("settings.updateAvailable"), `v${r.latest}`, true).catch(() => {});
-                    } else {
-                      notify(t("settings.updateNone"), `${t("settings.version")} ${r.current}`, true).catch(() => {});
-                    }
-                  }}
-                >
-                  {t("settings.checkNow")}
-                </button>
-              </div>
               <Toggle label={t("settings.darkTheme")} icon={<IconPalette size={15} />} checked={draft.use_dark_theme} onChange={(v) => set("use_dark_theme", v)} />
+              <Toggle label={t("settings.autoCheck")} icon={<IconSparkles size={15} />} checked={draft.check_updates} onChange={(v) => set("check_updates", v)} />
+              <div className="setrow">
+                <span className="setrow-label">{t("settings.updateRepo")}</span>
+                <input
+                  className="textinput"
+                  placeholder="owner/repo"
+                  value={draft.update_repo}
+                  onChange={(e) => set("update_repo", e.target.value)}
+                />
+              </div>
+              <div className="setrow">
+                <span className="setrow-label">{t("settings.updatePubkey")}</span>
+                <input
+                  className="textinput"
+                  placeholder="(可选)签名公钥"
+                  value={draft.update_pubkey}
+                  onChange={(e) => set("update_pubkey", e.target.value)}
+                />
+              </div>
+              <div className="setrow">
+                <span className="setrow-label">{t("settings.autoUpdate")}</span>
+                <div className="setrow-actions">
+                  <button className="chipbtn" onClick={() => runUpdateCheck(draft)}>
+                    {t("settings.checkNow")}
+                  </button>
+                  <button className="chipbtn" onClick={() => runUpdateInstall(draft)}>
+                    {t("settings.installNow")}
+                  </button>
+                </div>
+              </div>
+              <div className="hint">{t("settings.updateHint")}</div>
               <div className="setrow">
                 <span className="setrow-label">
                   <span className="icon"><IconDrive size={15} /></span>

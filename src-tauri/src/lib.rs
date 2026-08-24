@@ -11,6 +11,7 @@ pub mod memory;
 pub mod ntapi;
 pub mod tray;
 pub mod trayicon;
+pub mod updater;
 
 use config::Config;
 use memory::{CleanResult, MemoryInfo};
@@ -353,6 +354,7 @@ fn spawn_background(app: AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState {
             config: Mutex::new(config::load()),
             tray: Mutex::new(None),
@@ -406,7 +408,9 @@ pub fn run() {
             save_config,
             get_config_location,
             get_os_info,
-            notify
+            notify,
+            updater::check_for_update,
+            updater::download_and_install
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

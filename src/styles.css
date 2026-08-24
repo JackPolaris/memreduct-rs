@@ -770,6 +770,29 @@ input[type="color"] {
 
 select { max-width: 170px; }
 
+.textinput {
+  flex: 1;
+  min-width: 0;
+  max-width: 220px;
+  background: var(--surface-solid);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+.setrow-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.setrow-actions .chipbtn {
+  padding: 7px 12px;
+  flex-shrink: 0;
+}
+
 input[type="color"] {
   width: 44px;
   height: 30px;
