@@ -1,11 +1,11 @@
 {
-  "version": "3.5.10",
-  "notes": "Mem Reduct 3.5.10\n\n- 首页顶部去掉应用数据/Win字样\n- 清理按钮底部去掉结果文字(改由 toast 提示)",
-  "pub_date": "2026-08-24T20:45:00Z",
+  "version": "3.5.11",
+  "notes": "Mem Reduct 3.5.11\n\n- 修复检查更新发现新版不显示胶囊(冷启动首建丢失)\n- 检查更新加 30s 超时兜底(网络慢不再无限转圈)",
+  "pub_date": "2026-08-24T21:15:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TWhueTh1dG50aGc4clFCVGlxeFZnZ0N3d042dW5zOEhqNjdTQ1lRV3hkVWlvdml5L2haMjh1LzNpeXJVbDI3SmswanNJOG9rYVRneXFOQ2JESjVQaXdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NjE5MTM5CWZpbGU6TWVtIFJlZHVjdF8zLjUuMTBfeDY0LXNldHVwLmV4ZQpYTXZzaG8zbExPM3lkSHFjVUJtMXZQdjR6UGFDbXd3c0Z1QUgwUVdxdzR3REw3aXZxSG1MaDdpVEpPL3VhdmlOWHhUdGlqckI5ekxGa0M1YU5uQnBCQT09Cg==",
-      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.10/Mem.Reduct_3.5.10_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TW5hT2JSNFZEQkFzY21qenlEb2hXTmRhYTBseCtHb0FVb2VVM2lsSTdUUlRSd3B5WG10djBxamowRElhbnJPS0syWnpLcWlWOXJBQllhSjJBR0R4cWdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NjIyMDE0CWZpbGU6TWVtIFJlZHVjdF8zLjUuMTFfeDY0LXNldHVwLmV4ZQppb0pJOWpqQitFOWlXcWJmWFpBMmV2WHNOZHFJVzMvUTR2WHRYbko2SFBrRTV1bTJxelBFK3JKOW1TV1diR3p2Y3FwOVcwNnREaTVSeEswVWFvYXZDUT09Cg==",
+      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.11/Mem.Reduct_3.5.11_x64-setup.exe"
     }
   }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "mem-reduct"
-version = "3.5.10"
+version = "3.5.11"
 description = "Mem Reduct - lightweight real-time memory management application (Tauri + React rewrite)"
 authors = ["Mem Reduct contributors"]
 edition = "2021"
