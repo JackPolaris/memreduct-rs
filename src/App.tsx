@@ -8,18 +8,14 @@ import {
   downloadAndInstall,
   getAutostart,
   getConfig,
-  getConfigLocation,
   getMemoryInfo,
-  getOsInfo,
   getVersion,
   notify,
   openExternal,
   saveConfig,
   setAutostart,
-  type CleanResult,
   type Config,
   type MemoryInfo,
-  type OsInfo,
 } from "./api";
 import { MASK_ALL, MASK_DEFAULT, REGIONS } from "./regions";
 import { SUPPORTED_LANGUAGES } from "./i18n";
@@ -84,11 +80,8 @@ export default function App() {
   const [settingsSection, setSettingsSection] = useState<Section>("general");
   const [info, setInfo] = useState<MemoryInfo | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
-  const [osInfo, setOsInfo] = useState<OsInfo | null>(null);
-  const [configLocation, setConfigLocation] = useState<string>("");
   const [selectedMask, setSelectedMask] = useState<number>(MASK_DEFAULT);
   const [cleaning, setCleaning] = useState(false);
-  const [lastResult, setLastResult] = useState<CleanResult | null>(null);
   const [confirmMask, setConfirmMask] = useState<number | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [toastSeq, setToastSeq] = useState(0);
@@ -187,8 +180,6 @@ export default function App() {
 
   useEffect(() => {
     getMemoryInfo().then(setInfo);
-    getOsInfo().then(setOsInfo);
-    getConfigLocation().then(setConfigLocation);
     getVersion().then(setVersion).catch(() => {});
     getConfig().then((c) => {
       setConfig(c);
@@ -261,10 +252,8 @@ export default function App() {
   const runClean = async (mask: number) => {
     if (cleaning) return;
     setCleaning(true);
-    setLastResult(null);
     try {
       const res = await cleanMemory(mask, "manual");
-      setLastResult(res);
       getMemoryInfo().then(setInfo).catch(() => {});
       // In-app toast + system notification.
       const body = res.elevation_requested
@@ -348,10 +337,6 @@ export default function App() {
                 <span className="dot" />
                 {t(`status.${pressure}`)}
               </span>
-              <span className="statusbar-note">
-                {configLocation === "portable" ? t("main.portable") : t("main.appdata")}
-                {osInfo && ` · Win ${osInfo.major}.${osInfo.minor}`}
-              </span>
             </div>
 
             <section className="hero glass">
@@ -430,23 +415,6 @@ export default function App() {
               {cleaning ? null : <IconBolt size={20} />}
               {cleaning ? t("main.cleaning") : t("main.cleanMemory")}
             </button>
-
-            <div className="result">
-              {lastResult ? (
-                lastResult.elevation_requested ? (
-                  <>{t("main.elevationRequested")}</>
-                ) : (
-                  <>
-                    {t("main.released")}{" "}
-                    <strong>{formatBytes(lastResult.freed_bytes)}</strong>
-                    {lastResult.regions.length > 0 &&
-                      ` · ${lastResult.regions.length} ${t("main.regionsCount")}`}
-                  </>
-                )
-              ) : (
-                <>&nbsp;</>
-              )}
-            </div>
           </>
         </div>
         <div style={{ display: tab === "settings" ? "flex" : "none", flex: 1, minHeight: 0 }}>
