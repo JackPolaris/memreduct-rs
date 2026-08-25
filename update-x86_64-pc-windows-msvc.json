@@ -1,11 +1,11 @@
 {
-  "version": "3.5.9",
-  "notes": "Mem Reduct 3.5.9\n\n- 修复更新通知条重复/无法关闭/按钮点不到\n- 通知条交互式:立即更新按钮 + 下载进度条 + 可手动关闭",
-  "pub_date": "2026-08-24T20:25:00Z",
+  "version": "3.5.10",
+  "notes": "Mem Reduct 3.5.10\n\n- 首页顶部去掉应用数据/Win字样\n- 清理按钮底部去掉结果文字(改由 toast 提示)",
+  "pub_date": "2026-08-24T20:45:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TW90LzczMjBnOGo5RXIwY0NKVDJCQTZ5andrRVg5RndZcVdiMUlIc2daOUEyQU1FSHNhSkVaamxWVmtBTTc5YVJDUmtuOFZhM0ViVHVsQ3U5QWkybUFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NjE4MzM2CWZpbGU6TWVtIFJlZHVjdF8zLjUuOV94NjQtc2V0dXAuZXhlCmpCMVZwMExyemsxNHhwVjBBZ1pHWmVxUVRpQ21sWHlYV080UTE2UnVGVEFjYUZweTBoS3U3ZUhqVmRBTHdjUjJaTmkzVGQzeE5tR3B3UjQ2QkNGckRRPT0K",
-      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.9/Mem.Reduct_3.5.9_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TWhueTh1dG50aGc4clFCVGlxeFZnZ0N3d042dW5zOEhqNjdTQ1lRV3hkVWlvdml5L2haMjh1LzNpeXJVbDI3SmswanNJOG9rYVRneXFOQ2JESjVQaXdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NjE5MTM5CWZpbGU6TWVtIFJlZHVjdF8zLjUuMTBfeDY0LXNldHVwLmV4ZQpYTXZzaG8zbExPM3lkSHFjVUJtMXZQdjR6UGFDbXd3c0Z1QUgwUVdxdzR3REw3aXZxSG1MaDdpVEpPL3VhdmlOWHhUdGlqckI5ekxGa0M1YU5uQnBCQT09Cg==",
+      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.10/Mem.Reduct_3.5.10_x64-setup.exe"
     }
   }
 }
