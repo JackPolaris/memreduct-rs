@@ -1,11 +1,11 @@
 {
-  "version": "3.5.8",
-  "notes": "Mem Reduct 3.5.8\n\n- 首页去掉硬编码版本信息",
-  "pub_date": "2026-08-24T20:05:00Z",
+  "version": "3.5.9",
+  "notes": "Mem Reduct 3.5.9\n\n- 修复更新通知条重复/无法关闭/按钮点不到\n- 通知条交互式:立即更新按钮 + 下载进度条 + 可手动关闭",
+  "pub_date": "2026-08-24T20:25:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TWcyMUJoQjREVHVYWnlmSXR2OVpmdm9VemRvNmhqWnJwaUlQNkF1RVlNMkU1aFlQVEF4aFRtNUV1TEEyY2xTZGtrZjhKbEh2cVoyb2l5NkJGOHN3b2dvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NjE0NzUwCWZpbGU6TWVtIFJlZHVjdF8zLjUuOF94NjQtc2V0dXAuZXhlCmNzMlJpQ2MzdS9yak5seTJhOHNDbkFrNy9rdG9MOFRuK1NQNVBwQm03OGxCWmg4ZG1vZ3JlQ2ZhN3ZlTm9YeXU2bDQ3bTVkNVVtbEJKczBESUd5SkFBPT0K",
-      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.8/Mem.Reduct_3.5.8_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TW90LzczMjBnOGo5RXIwY0NKVDJCQTZ5andrRVg5RndZcVdiMUlIc2daOUEyQU1FSHNhSkVaamxWVmtBTTc5YVJDUmtuOFZhM0ViVHVsQ3U5QWkybUFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NjE4MzM2CWZpbGU6TWVtIFJlZHVjdF8zLjUuOV94NjQtc2V0dXAuZXhlCmpCMVZwMExyemsxNHhwVjBBZ1pHWmVxUVRpQ21sWHlYV080UTE2UnVGVEFjYUZweTBoS3U3ZUhqVmRBTHdjUjJaTmkzVGQzeE5tR3B3UjQ2QkNGckRRPT0K",
+      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.9/Mem.Reduct_3.5.9_x64-setup.exe"
     }
   }
 }
