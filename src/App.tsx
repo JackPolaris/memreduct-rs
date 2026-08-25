@@ -640,11 +640,18 @@ function SettingsPanel({
 
   // Single "Check for updates" flow: check → if a new version exists, download
   // and install it in the background, then the app restarts automatically.
+  // The GitHub endpoint is slow/unstable (measured 3–14s+ on this network), so
+  // we guard with a hard timeout so the button never spins forever.
   const runUpdateCheck = async () => {
     if (updatePhase !== "idle") return;
     setUpdatePhase("checking");
     try {
-      const r = await checkForUpdate();
+      const r = await Promise.race([
+        checkForUpdate(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(t("settings.updateTimeout"))), 30000)
+        ),
+      ]);
       if (r.available) {
         setUpdatePhase("idle");
         // Delegate to the shared update flow (interactive pill + progress).

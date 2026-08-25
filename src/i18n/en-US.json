@@ -74,6 +74,7 @@
     "updateAvailable": "New version available",
     "updateNone": "You're up to date",
     "updateError": "Failed to check/download update",
+    "updateTimeout": "Update check timed out — check your network and retry",
     "version": "Version",
     "darkTheme": "Dark theme",
     "theme": "Theme",

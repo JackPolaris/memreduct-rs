@@ -80,6 +80,7 @@
     "updateAvailable": "发现新版本",
     "updateNone": "当前已是最新版本",
     "updateError": "检查/下载更新失败",
+    "updateTimeout": "检查更新超时，请检查网络后重试",
     "version": "版本",
     "darkTheme": "深色主题",
     "theme": "主题",

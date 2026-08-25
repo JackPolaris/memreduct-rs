@@ -74,6 +74,7 @@
     "updateAvailable": "發現新版本",
     "updateNone": "目前是最新版本",
     "updateError": "檢查/下載更新失敗",
+    "updateTimeout": "檢查更新逾時，請檢查網路後重試",
     "version": "版本",
     "darkTheme": "深色主題",
     "theme": "主題",

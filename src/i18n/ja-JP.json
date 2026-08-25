@@ -74,6 +74,7 @@
     "updateAvailable": "新しいバージョンがあります",
     "updateNone": "最新版です",
     "updateError": "更新の確認・ダウンロードに失敗しました",
+    "updateTimeout": "更新の確認がタイムアウトしました。ネットワークを確認して再試行してください",
     "version": "バージョン",
     "darkTheme": "ダークテーマ",
     "theme": "テーマ",
