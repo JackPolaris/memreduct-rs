@@ -137,14 +137,19 @@ export default function App() {
   ) => {
     const id = opts?.stickyId ?? Date.now() + toastSeq;
     if (opts?.stickyId !== undefined) {
-      // Update an existing sticky toast in place (progress / deduped prompt).
-      setToasts((ts) =>
-        ts.map((t) =>
-          t.id === id
-            ? { ...t, title, body, progress: opts?.progress, progressTotal: opts?.progressTotal, action: opts?.action }
-            : t
-        )
-      );
+      // Upsert: if a toast with this sticky id exists, update it in place;
+      // otherwise create it. (A pure "update existing" silently drops the first
+      // push, which is why the update prompt never showed on a cold state.)
+      setToasts((ts) => {
+        if (ts.some((t) => t.id === opts?.stickyId)) {
+          return ts.map((t) =>
+            t.id === opts?.stickyId
+              ? { ...t, title, body, progress: opts?.progress, progressTotal: opts?.progressTotal, action: opts?.action }
+              : t
+          );
+        }
+        return [...ts, { id, title, body, kind, progress: opts?.progress, progressTotal: opts?.progressTotal, action: opts?.action }];
+      });
       return id;
     }
     setToastSeq((s) => s + 1);
