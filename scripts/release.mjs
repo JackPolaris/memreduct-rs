@@ -162,8 +162,11 @@ function verifySignature(file, signatureB64, pubkeyB64) {
   const decode = (b64) => Buffer.from(Buffer.from(b64, "base64").toString("utf8").split("\n")[1], "base64");
   const pub = decode(pubkeyB64);
   const sig = decode(signatureB64);
-  const keyId = pub.subarray(2, 10).toString("hex").toUpperCase();
-  const sigKeyId = sig.subarray(2, 10).toString("hex").toUpperCase();
+  // minisign prints the key id in the reverse of its on-disk byte order, so
+  // reverse it here to match the id shown in the `.pub` comment (and in
+  // `tauri.conf.json`), which is what a human compares against.
+  const keyId = Buffer.from(pub.subarray(2, 10)).reverse().toString("hex").toUpperCase();
+  const sigKeyId = Buffer.from(sig.subarray(2, 10)).reverse().toString("hex").toUpperCase();
   const alg = sig.subarray(0, 2).toString("latin1");
 
   const data = fs.readFileSync(file);
@@ -477,11 +480,22 @@ async function cmdPublish() {
   }
 
   git("add", "-A");
-  git("commit", "-F", msgFile);
+  // Idempotent: the publish step may be re-run after a partial failure (e.g. the
+  // push failing), by which time everything is already committed.
+  if (git("status", "--porcelain")) {
+    git("commit", "-F", msgFile);
+    ok(`已提交: ${git("log", "-1", "--oneline")}`);
+  } else {
+    ok(`没有待提交改动,复用 HEAD: ${git("log", "-1", "--oneline")}`);
+  }
   fs.rmSync(msgFile, { force: true });
-  ok(`已提交: ${git("log", "-1", "--oneline")}`);
-  git("tag", "-a", tag, "-m", `Mem Reduct ${version}`);
-  ok(`已打 tag ${tag}`);
+
+  if (trySh("git", ["rev-parse", "-q", "--verify", `refs/tags/${tag}`]).ok) {
+    ok(`tag ${tag} 已存在,跳过`);
+  } else {
+    git("tag", "-a", tag, "-m", `Mem Reduct ${version}`);
+    ok(`已打 tag ${tag}`);
+  }
 
   const pushBranch = trySh("git", ["push", "origin", BRANCH]);
   const pushTag = pushBranch.ok ? trySh("git", ["push", "origin", tag]) : { ok: false, out: "" };
@@ -530,7 +544,13 @@ function pushViaApi(tag) {
 
   for (const sha of pending) {
     const raw = git("cat-file", "commit", sha);
-    const [header, , message] = raw.split(/\n\n/);
+    // Split on the FIRST blank line only: a commit message of the form
+    // "subject\n\nbody" — which is the normal shape — would otherwise be cut
+    // apart by a naive split(/\n\n/), truncating the message and producing a
+    // different SHA than the local commit.
+    const splitAt = raw.indexOf("\n\n");
+    const header = raw.slice(0, splitAt);
+    const message = raw.slice(splitAt + 2);
     const meta = (key) => {
       const line = header.split("\n").find((l) => l.startsWith(`${key} `));
       const m = line.slice(key.length + 1).match(/^(.*) <(.*)> (\d+) ([+-]\d{4})$/);
@@ -582,7 +602,14 @@ function pushViaApi(tag) {
 
   const existing = trySh("gh", ["api", `repos/${REPO}/git/ref/tags/${tag}`, "--jq", ".object.sha"]);
   if (!(existing.ok && existing.out.trim())) {
-    const target = jq(`repos/${REPO}/git/ref/heads/${BRANCH}`, ".object.sha");
+    // Tag the commit the *local* annotated tag points at, not the branch head:
+    // the branch may carry commits published after the release commit, and the
+    // two must agree or the tag would name the wrong tree.
+    const localTarget = trySh("git", ["rev-list", "-n", "1", tag]);
+    const target =
+      localTarget.ok && localTarget.out.trim()
+        ? localTarget.out.trim()
+        : jq(`repos/${REPO}/git/ref/heads/${BRANCH}`, ".object.sha");
     const tagObj = api(`/repos/${REPO}/git/tags`, "POST", {
       tag,
       message: `Mem Reduct ${version}`,
@@ -590,7 +617,7 @@ function pushViaApi(tag) {
       type: "commit",
     });
     api(`/repos/${REPO}/git/refs`, "POST", { ref: `refs/tags/${tag}`, sha: tagObj.sha });
-    ok(`已通过 API 创建 tag ${tag}`);
+    ok(`已通过 API 创建 tag ${tag} -> ${target.slice(0, 7)}`);
   }
 }
 
