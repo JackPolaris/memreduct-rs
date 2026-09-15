@@ -1,6 +1,9 @@
-// i18next setup: Simplified Chinese is the primary language, with support for
-// multiple locales. The app language is configurable in Settings; default
-// fallbacks to the system locale, then to zh-CN.
+// i18next setup: Simplified Chinese is the primary language.
+//
+// Only the locales that actually ship a translation bundle are listed as
+// selectable languages — every entry below maps to a JSON file in this folder
+// (the picker previously offered Korean/German/French, which silently fell back
+// to Chinese, so the UI claimed a language it could not display).
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
@@ -14,56 +17,50 @@ export const SUPPORTED_LANGUAGES = [
   { code: "zh-TW", label: "繁體中文" },
   { code: "en-US", label: "English" },
   { code: "ja-JP", label: "日本語" },
-  { code: "ko-KR", label: "한국어" },
-  { code: "de-DE", label: "Deutsch" },
-  { code: "fr-FR", label: "Français" },
 ] as const;
 
-export const DEFAULT_LANGUAGE = "zh-CN";
+export type LanguageCode = (typeof SUPPORTED_LANGUAGES)[number]["code"];
 
-// Load a language bundle synchronously (small JSON). For locales without a
-// dedicated bundle we fall back to zh-CN (primary) so the UI never shows raw
-// keys.
-function loadResource(lang: string): Record<string, unknown> {
-  switch (lang) {
-    case "en-US":
-      return enUS;
-    case "zh-TW":
-      return zhTW;
-    case "ja-JP":
-      return jaJP;
-    default:
-      return zhCN;
+export const DEFAULT_LANGUAGE: LanguageCode = "zh-CN";
+
+/** Translation bundles, keyed by the exact language code used everywhere else. */
+const RESOURCES: Record<LanguageCode, Record<string, unknown>> = {
+  "zh-CN": zhCN,
+  "zh-TW": zhTW,
+  "en-US": enUS,
+  "ja-JP": jaJP,
+};
+
+/** Normalise any locale string ("zh-Hans-CN", "en", "zh-HK", …) to a supported code. */
+export function normalizeLanguage(lang: string | undefined): LanguageCode | undefined {
+  if (!lang) return undefined;
+  const lower = lang.toLowerCase();
+  const exact = SUPPORTED_LANGUAGES.find((l) => l.code.toLowerCase() === lower);
+  if (exact) return exact.code;
+  if (lower.startsWith("zh")) {
+    return /hant|tw|hk|mo/.test(lower) ? "zh-TW" : "zh-CN";
   }
+  if (lower.startsWith("en")) return "en-US";
+  if (lower.startsWith("ja")) return "ja-JP";
+  return undefined;
 }
 
-function detectLanguage(): string {
-  // Prefer the persisted config language (set on startup), else system locale.
+/** Detect the initial language from the system locale, falling back to zh-CN. */
+function detectLanguage(): LanguageCode {
   try {
-    const nav = navigator.language;
-    if (nav && nav.toLowerCase().startsWith("en")) return "en-US";
-    if (nav && nav.toLowerCase().startsWith("zh")) return "zh-CN";
+    return normalizeLanguage(navigator.language) ?? DEFAULT_LANGUAGE;
   } catch {
-    // ignore
+    return DEFAULT_LANGUAGE;
   }
-  return DEFAULT_LANGUAGE;
 }
-
-const initialLang = detectLanguage();
-export const CURRENT_LANGS = SUPPORTED_LANGUAGES.map((l) => l.code);
 
 i18n.use(initReactI18next).init({
-  lng: initialLang,
-  fallbackLng: "zh-CN",
-  resources: {
-    "zh-CN": { translation: loadResource("zh-CN") },
-    "zh-TW": { translation: loadResource("zh-TW") },
-    "en-US": { translation: loadResource("en-US") },
-    "ja-JP": { translation: loadResource("ja-JP") },
-    "ko-KR": { translation: loadResource("ko-KR") },
-    "de-DE": { translation: loadResource("de-DE") },
-    "fr-FR": { translation: loadResource("fr-FR") },
-  },
+  lng: detectLanguage(),
+  fallbackLng: DEFAULT_LANGUAGE,
+  supportedLngs: SUPPORTED_LANGUAGES.map((l) => l.code),
+  resources: Object.fromEntries(
+    Object.entries(RESOURCES).map(([code, bundle]) => [code, { translation: bundle }])
+  ),
   interpolation: { escapeValue: false },
   returnNull: false,
 });

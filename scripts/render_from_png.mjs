@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
-const SRC = path.join(ROOT, "清理.png");
+const SRC = path.join(ROOT, "assets", "icon-reference.png");
 const OUT = path.join(ROOT, "src-tauri", "icons");
 
 const sizes = [

@@ -1,21 +1,26 @@
-// Accent color presets for the app theme. Each entry defines the primary and
-// secondary accent (used as --accent / --accent2 CSS variables).
+// Accent color presets for the app theme.
+//
+// Only the base accent colour is pushed to CSS (`--accent-base`); every derived
+// tone (hover/gradient/soft tint/glow) is computed from it in styles.css, so a
+// preset switch really re-tints the whole UI — including dark mode.
 
 export interface Accent {
+  /** Config key stored in `config.accent_color`. */
   key: string;
-  name: string;
+  /** i18n key under `accent.*` for the human-readable name. */
+  nameKey: string;
+  /** Base accent colour (light theme). */
   primary: string;
-  secondary: string;
 }
 
 export const ACCENTS: Accent[] = [
-  { key: "green", name: "绿", primary: "#0b9d5e", secondary: "#07914f" },
-  { key: "purple", name: "紫", primary: "#676ebb", secondary: "#555a9e" },
-  { key: "blue", name: "蓝", primary: "#2563eb", secondary: "#1d4ed8" },
-  { key: "orange", name: "橙", primary: "#ea7500", secondary: "#d16400" },
-  { key: "red", name: "红", primary: "#ef4444", secondary: "#dc2626" },
-  { key: "cyan", name: "青", primary: "#0891b2", secondary: "#0e7490" },
-  { key: "pink", name: "粉", primary: "#db2777", secondary: "#be185d" },
+  { key: "green", nameKey: "accent.green", primary: "#0b9d5e" },
+  { key: "purple", nameKey: "accent.purple", primary: "#676ebb" },
+  { key: "blue", nameKey: "accent.blue", primary: "#2563eb" },
+  { key: "orange", nameKey: "accent.orange", primary: "#ea7500" },
+  { key: "red", nameKey: "accent.red", primary: "#ef4444" },
+  { key: "cyan", nameKey: "accent.cyan", primary: "#0891b2" },
+  { key: "pink", nameKey: "accent.pink", primary: "#db2777" },
 ];
 
 export function accentByKey(key: string): Accent {

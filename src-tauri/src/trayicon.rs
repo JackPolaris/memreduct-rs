@@ -23,6 +23,9 @@ const BORDER: usize = 2;
 /// Corner radius when `round` is enabled.
 const RADIUS: isize = 7;
 
+/// Style of the rendered tray icon. Cheap to copy and compare so the background
+/// loop can skip re-rasterising an unchanged icon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TrayIconStyle {
     pub bg: [u8; 3],
     pub fg: [u8; 3],

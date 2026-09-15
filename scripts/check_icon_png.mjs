@@ -1,6 +1,6 @@
 import sharp from "sharp";
 
-const f = "清理.png";
+const f = "assets/icon-reference.png";
 const { data, info } = await sharp(f).raw().toBuffer({ resolveWithObject: true });
 const ch = info.channels;
 const w = info.width;

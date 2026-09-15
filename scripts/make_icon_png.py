@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the app icon PNGs directly (no SVG renderer needed).
 
-The upstream `清理.svg` cannot be rendered by libvips/sharp (renders blank),
+The upstream `assets/icon.svg` cannot be rendered by libvips/sharp (blank),
 which is why `tauri icon` produced transparent PNGs and the exe icon showed as
 a green/black placeholder. This script draws the brand icon procedurally:
 a purple rounded-circle background with a white "memory modules" glyph.
