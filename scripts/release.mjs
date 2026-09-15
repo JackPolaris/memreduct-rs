@@ -83,6 +83,14 @@ function trySh(cmd, args, opts = {}) {
   }
 }
 const git = (...args) => sh("git", args).trim();
+/**
+ * Like `git`, but byte-exact — no trailing-whitespace stripping.
+ *
+ * Needed for `cat-file commit`: a commit message ends with a newline, and losing
+ * that one byte changes the object hash. Feeding the trimmed message back to the
+ * API produced a commit whose SHA never matched the local one.
+ */
+const gitRaw = (...args) => sh("git", args);
 const gh = (args, input) => sh("gh", args, input ? { input } : {});
 const readJson = (p) => JSON.parse(fs.readFileSync(path.join(ROOT, p), "utf8"));
 const writeJson = (p, obj) =>
@@ -543,11 +551,8 @@ function pushViaApi(tag) {
   let baseTree = jq(`repos/${REPO}/git/commits/${remoteHead}`, ".tree.sha");
 
   for (const sha of pending) {
-    const raw = git("cat-file", "commit", sha);
-    // Split on the FIRST blank line only: a commit message of the form
-    // "subject\n\nbody" — which is the normal shape — would otherwise be cut
-    // apart by a naive split(/\n\n/), truncating the message and producing a
-    // different SHA than the local commit.
+    // Byte-exact: the trailing newline of the message is part of the object.
+    const raw = gitRaw("cat-file", "commit", sha);
     const splitAt = raw.indexOf("\n\n");
     const header = raw.slice(0, splitAt);
     const message = raw.slice(splitAt + 2);
