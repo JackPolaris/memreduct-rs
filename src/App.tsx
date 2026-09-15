@@ -267,23 +267,52 @@ function useSlidingTab(activeIndex: number) {
   return { navRef, pill };
 }
 
+/** Imperative handle for the particle layer, so non-click events can burst. */
+interface SparkApi {
+  /** Radial particle burst centred on a viewport point. */
+  burst: (
+    x: number,
+    y: number,
+    opts?: { color?: string; count?: number; reach?: number; life?: number }
+  ) => void;
+}
+
+interface Spark {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  start: number;
+  life: number;
+  len: number;
+  width: number;
+  color: string;
+}
+
 /**
- * Spark burst from the click point — a dependency-free take on React Bits'
- * `ClickSpark`.
+ * Particle layer — a dependency-free take on React Bits' `ClickSpark`, extended
+ * into something the app can also fire imperatively (see `SparkApi.burst`).
  *
- * Fires only for the primary actions matching `selector`, not on every click:
- * spraying particles whenever a checkbox is toggled would be noise in a system
- * utility. Rendered as a fixed, non-interactive canvas so it never intercepts
- * input.
+ * Two kinds of burst share one canvas and one rAF loop:
+ * - **clicks** on the primary actions only, matched by `selector`. Spraying
+ *   particles on every checkbox toggle would be noise in a system utility.
+ * - **a successful cleanup**, which bursts from the gauge (`burst()`) instead of
+ *   from a pointer, because there is no pointer involved in the tray/hotkey/auto
+ *   paths either.
+ *
+ * The canvas is fixed and never intercepts input, and the loop stops as soon as
+ * the last particle dies, so an idle window runs no animation at all.
  */
 function ClickSpark({
   selector,
   color,
   enabled,
+  apiRef,
 }: {
   selector: string;
   color: string;
   enabled: boolean;
+  apiRef?: React.MutableRefObject<SparkApi | null>;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -307,57 +336,104 @@ function ClickSpark({
     sizeToWindow();
     clear();
 
-    if (!enabled) return;
-
-    const LIFE = 420;
-    let sparks: { x: number; y: number; angle: number; start: number }[] = [];
+    let sparks: Spark[] = [];
     let raf = 0;
 
     const frame = (now: number) => {
       clear();
-      sparks = sparks.filter((s) => now - s.start < LIFE);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      sparks = sparks.filter((s) => now - s.start < s.life);
       ctx.lineCap = "round";
       for (const s of sparks) {
-        const p = (now - s.start) / LIFE;
-        const distance = 3 + 20 * p;
-        const cx = s.x + Math.cos(s.angle) * distance;
-        const cy = s.y + Math.sin(s.angle) * distance;
-        const len = 5 + 9 * (1 - p);
+        const p = (now - s.start) / s.life;
+        // Ease-out: fast off the mark, drifting to a stop.
+        const eased = 1 - Math.pow(1 - p, 2);
+        const cx = s.x + s.vx * eased;
+        const cy = s.y + s.vy * eased;
+        const len = s.len * (1 - p);
         ctx.globalAlpha = 1 - p;
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = s.width;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + Math.cos(s.angle) * len, cy + Math.sin(s.angle) * len);
+        const angle = Math.atan2(s.vy, s.vx);
+        ctx.lineTo(cx + Math.cos(angle) * len, cy + Math.sin(angle) * len);
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
       raf = sparks.length ? requestAnimationFrame(frame) : 0;
     };
 
+    const launch = (batch: Spark[]) => {
+      sparks = sparks.concat(batch);
+      if (!raf) raf = requestAnimationFrame(frame);
+    };
+
+    /** Radial burst with a little jitter, so repeated bursts don't look stamped. */
+    const burst: SparkApi["burst"] = (x, y, opts = {}) => {
+      const count = opts.count ?? 18;
+      const reach = opts.reach ?? 46;
+      const life = opts.life ?? 720;
+      const tint = opts.color ?? color;
+      const now = performance.now();
+      launch(
+        Array.from({ length: count }, (_, i) => {
+          const angle = (Math.PI * 2 * i) / count + Math.random() * 0.25;
+          const radius = reach * (0.65 + Math.random() * 0.5);
+          return {
+            x,
+            y,
+            vx: Math.cos(angle) * radius,
+            vy: Math.sin(angle) * radius,
+            start: now + Math.random() * 60,
+            life: life * (0.75 + Math.random() * 0.5),
+            len: 6 + Math.random() * 7,
+            width: 1.6 + Math.random(),
+            color: tint,
+          };
+        })
+      );
+    };
+
+    if (apiRef) apiRef.current = { burst };
+    if (!enabled) {
+      return () => {
+        if (apiRef) apiRef.current = null;
+        if (raf) cancelAnimationFrame(raf);
+        clear();
+      };
+    }
+
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Element | null;
       if (!target?.closest?.(selector)) return;
       for (let i = 0; i < 9; i++) {
-        sparks.push({
-          x: e.clientX,
-          y: e.clientY,
-          angle: (Math.PI * 2 * i) / 9,
-          start: performance.now(),
-        });
+        const angle = (Math.PI * 2 * i) / 9;
+        launch([
+          {
+            x: e.clientX,
+            y: e.clientY,
+            vx: Math.cos(angle) * 23,
+            vy: Math.sin(angle) * 23,
+            start: performance.now(),
+            life: 420,
+            len: 9,
+            width: 2,
+            color,
+          },
+        ]);
       }
-      if (!raf) raf = requestAnimationFrame(frame);
     };
 
     window.addEventListener("resize", sizeToWindow);
     window.addEventListener("pointerdown", onPointerDown);
     return () => {
+      if (apiRef) apiRef.current = null;
       window.removeEventListener("resize", sizeToWindow);
       window.removeEventListener("pointerdown", onPointerDown);
       if (raf) cancelAnimationFrame(raf);
       clear();
     };
-  }, [selector, color, enabled]);
+  }, [selector, color, enabled, apiRef]);
 
   return <canvas ref={canvasRef} className="click-spark" aria-hidden="true" />;
 }
@@ -403,6 +479,12 @@ export default function App() {
   const [lastCheck, setLastCheck] = useState<CheckOutcome | null>(null);
   /** An announced update waiting for the user's decision (renders the banner). */
   const [availableUpdate, setAvailableUpdate] = useState<UpdateInfo | null>(null);
+  /** Re-keyed on every successful cleanup to replay the gauge shockwave. */
+  const [shockKey, setShockKey] = useState(0);
+  /** Imperative handle on the particle layer (see `SparkApi`). */
+  const sparkApi = useRef<SparkApi | null>(null);
+  /** The gauge, so a burst can be centred on it rather than on a pointer. */
+  const gaugeWrapRef = useRef<HTMLDivElement | null>(null);
   const progressToastId = useRef<number | null>(null);
   /** Monotonic id source: `Date.now()` alone collides when two toasts are
    *  pushed within the same millisecond. */
@@ -729,6 +811,20 @@ export default function App() {
     try {
       const res = await cleanMemory(mask, "manual");
       getMemoryInfo().then(setInfo).catch(() => {});
+      // Celebrate *only* a full success: a partially refused cleanup is not
+      // something to throw confetti at.
+      if (res.failed.length === 0 && !reduceMotion) {
+        setShockKey((k) => k + 1);
+        const box = gaugeWrapRef.current?.getBoundingClientRect();
+        if (box) {
+          sparkApi.current?.burst(box.left + box.width / 2, box.top + box.height / 2, {
+            color: accentByKey(config?.accent_color ?? "green").primary,
+            count: 22,
+            reach: 58,
+            life: 820,
+          });
+        }
+      }
       // In-app toast + system notification.
       const body = cleanResultBody(res, t);
       if (config?.balloon_clean_results ?? true) {
@@ -827,6 +923,16 @@ export default function App() {
   const { navRef, pill } = useSlidingTab(tab === "main" ? 0 : 1);
   return (
     <div className={`app ${resolvedDark ? "dark" : ""}`} ref={appRef}>
+      {/* Ambient depth layer: two slowly drifting soft lights behind a faint dot
+          grid. Transform-only animation, so it stays on the compositor — the
+          point is to stop the window looking flat, not to cost CPU in a process
+          whose job is to save memory. */}
+      <div className="ambient" aria-hidden="true">
+        <span className="ambient-blob ambient-a" />
+        <span className="ambient-blob ambient-b" />
+        <span className="ambient-grid" />
+        <span className="ambient-grain" />
+      </div>
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark">
@@ -909,9 +1015,12 @@ export default function App() {
             </div>
 
             <section className="hero glass" data-spot>
-              <div className="gauge-wrap">
+              <div className="gauge-wrap" ref={gaugeWrapRef}>
+                {/* Shockwave: re-keyed on every successful cleanup so the
+                    animation replays instead of being a one-shot on mount. */}
+                {shockKey > 0 && <span key={shockKey} className="shockwave" aria-hidden="true" />}
                 <div
-                  className="gauge"
+                  className={`gauge ${pressure}`}
                   style={
                     {
                       // The ring is driven by a registered custom property so the
@@ -922,6 +1031,20 @@ export default function App() {
                     } as React.CSSProperties
                   }
                 >
+                  {/* Scale marks, then the leading dot. The dot rides the end of
+                      the arc: a conic gradient cannot have a rounded cap, so a
+                      rotated layer carries one. The angle is inline (the ring's
+                      animated custom property does not reach a child transform
+                      reliably); the CSS transition on `transform` does the
+                      easing instead. */}
+                  <span className="gauge-ticks" aria-hidden="true" />
+                  <span
+                    className="gauge-head"
+                    aria-hidden="true"
+                    style={{ transform: `rotate(${physPct * 3.6}deg)` }}
+                  >
+                    <span className="gauge-head-dot" />
+                  </span>
                   <div className="gauge-inner">
                     {/* Filled by usePercentTween through the DOM; rendering the
                         value here as well would fight the animation. */}
@@ -1108,6 +1231,7 @@ export default function App() {
         selector=".clean-btn, .btn-primary, .update-banner-btn"
         color={accentByKey(config?.accent_color ?? "green").primary}
         enabled={!reduceMotion}
+        apiRef={sparkApi}
       />
     </div>
   );
@@ -1194,8 +1318,10 @@ function RegionCard({
       title={disabled ? note : undefined}
     >
       <span className="check">
+        {/* `pathLength=1` normalises the path so the tick can be drawn in with a
+            plain stroke-dashoffset transition, without measuring it in JS. */}
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6L9 17l-5-5" />
+          <path pathLength={1} d="M20 6L9 17l-5-5" />
         </svg>
       </span>
       <span className="region-body">

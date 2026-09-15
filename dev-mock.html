@@ -59,7 +59,8 @@
         const config = {
           start_minimized: false,
           show_reduct_confirmation: true,
-          theme: "light",
+          // `?dark=1` previews the dark theme.
+          theme: params.get("dark") ? "dark" : "light",
           accent_color: "green",
           use_dark_theme: false,
           language: "zh-CN",
@@ -202,14 +203,24 @@
         if (params.get("diag") === "1") {
           setTimeout(() => {
             const de = document.documentElement;
+            const clipped = (el) => {
+              // An element whose ancestor clips it cannot overflow the document.
+              for (let a = el.parentElement; a; a = a.parentElement) {
+                const o = getComputedStyle(a).overflowX;
+                if (o === "hidden" || o === "clip" || o === "auto" || o === "scroll") return true;
+              }
+              return false;
+            };
             const offenders = [...document.querySelectorAll("body *")]
               .map((el) => ({ el, r: el.getBoundingClientRect() }))
-              .filter(({ r }) => r.right > window.innerWidth + 0.5 && r.width > 4)
-              .slice(0, 8)
+              .filter(({ el, r }) => r.right > window.innerWidth + 0.5 && r.width > 4)
+              .sort((a, b) => b.r.right - a.r.right)
+              .slice(0, 6)
               .map(
                 ({ el, r }) =>
                   `${el.tagName.toLowerCase()}.${String(el.className).split(" ")[0]} ` +
-                  `left=${Math.round(r.left)} right=${Math.round(r.right)} w=${Math.round(r.width)}`
+                  `left=${Math.round(r.left)} right=${Math.round(r.right)} w=${Math.round(r.width)}` +
+                  (clipped(el) ? " [被祖先裁剪]" : " [实际越界!]")
               );
             const pre = document.createElement("pre");
             pre.style.cssText =
@@ -219,6 +230,20 @@
               `innerWidth=${window.innerWidth} scrollWidth=${de.scrollWidth} ` +
               `bodyScrollWidth=${document.body.scrollWidth}\n` +
               (offenders.length ? offenders.join("\n") : "(无元素越界)");
+            // Gauge probe: the ring (CSS transition), the leading dot (inherits
+            // the same animated custom property) and the number (JS tween) must
+            // agree once things settle.
+            const gauge = document.querySelector(".gauge");
+            const head = document.querySelector(".gauge-head");
+            const value = document.querySelector(".gauge-value");
+            if (gauge && head) {
+              const cs = getComputedStyle(gauge);
+              const hs = getComputedStyle(head);
+              pre.textContent +=
+                `\n--gauge-pct=${cs.getPropertyValue("--gauge-pct").trim()}` +
+                ` head.transform=${hs.transform}` +
+                ` text=${value ? value.textContent : "?"}`;
+            }
             document.body.appendChild(pre);
           }, 900);
         }

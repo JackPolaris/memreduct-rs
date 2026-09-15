@@ -38,6 +38,8 @@
   --shadow-sm: 0 1px 2px rgba(16, 32, 56, 0.05), 0 4px 12px rgba(16, 32, 56, 0.05);
   --shadow-md: 0 12px 32px rgba(16, 32, 56, 0.12);
   --shadow-lg: 0 24px 56px rgba(16, 32, 56, 0.18);
+  /* Top-edge highlight shared by every raised surface (see `.metric`). */
+  --rim: rgba(255, 255, 255, 0.7);
   --ring-bg: #dfe7f0;
 
   --radius: 18px;
@@ -75,6 +77,8 @@ body.dark {
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 14px 34px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 26px 60px rgba(0, 0, 0, 0.6);
+  /* Barely-there on dark surfaces: a strong rim reads as plastic. */
+  --rim: rgba(255, 255, 255, 0.06);
   --ring-bg: #232d3c;
 }
 
@@ -104,6 +108,87 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* ===== Ambient depth =====
+   Two soft lights drifting on long, offset loops plus a faint dot grid and a
+   whisper of grain. Everything here is `transform`-only (compositor work) — a
+   window that looks alive should not cost the CPU the user is trying to free. */
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ambient-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(46px);
+  opacity: 0.55;
+  will-change: transform;
+}
+
+.ambient-a {
+  width: 320px;
+  height: 320px;
+  top: -120px;
+  left: -90px;
+  background: radial-gradient(circle, var(--accent-glow), transparent 70%);
+  animation: drift-a 26s ease-in-out infinite alternate;
+}
+
+.ambient-b {
+  width: 300px;
+  height: 300px;
+  bottom: -130px;
+  right: -110px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--info) 26%, transparent), transparent 70%);
+  animation: drift-b 32s ease-in-out infinite alternate;
+}
+
+.app.dark .ambient-blob {
+  opacity: 0.42;
+}
+
+@keyframes drift-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(60px, 44px, 0) scale(1.16); }
+}
+
+@keyframes drift-b {
+  from { transform: translate3d(0, 0, 0) scale(1.1); }
+  to { transform: translate3d(-54px, -38px, 0) scale(0.94); }
+}
+
+/* Faint dot grid: a static image, so it costs nothing to keep on screen. */
+.ambient-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background-image: radial-gradient(currentColor 0.6px, transparent 0.6px);
+  background-size: 18px 18px;
+  color: color-mix(in srgb, var(--text) 22%, transparent);
+  mask-image: radial-gradient(120% 80% at 50% 0%, #000 25%, transparent 75%);
+  -webkit-mask-image: radial-gradient(120% 80% at 50% 0%, #000 25%, transparent 75%);
+}
+
+/* Film grain. A 3%-opacity tile is enough to break up the flat gradients; it is
+   inlined so there is no request and no dependency. */
+.ambient-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Content sits above the ambient layer. */
+.topbar,
+.content,
+.update-banner {
+  position: relative;
+  z-index: 1;
 }
 
 /* ===== Top bar ===== */
@@ -226,7 +311,9 @@ body {
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow-md);
+  /* Rim light on top, ambient shadow below — the standard two-part shading that
+     makes frosted panels read as physical objects. */
+  box-shadow: var(--shadow-md), inset 0 1px 0 0 var(--rim);
 }
 
 /* ===== Status chip ===== */
@@ -264,6 +351,18 @@ body {
 .statuschip.ok .dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .statuschip.warn .dot { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-soft); }
 .statuschip.crit .dot { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+
+/* Only the danger state animates: a chip that pulses when nothing is wrong
+   teaches the user to ignore it. */
+.statuschip.crit .dot {
+  animation: dot-alarm 1.8s ease-in-out infinite;
+}
+
+@keyframes dot-alarm {
+  0%, 100% { box-shadow: 0 0 0 3px var(--danger-soft); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}
+
 .statuschip.ok { color: var(--accent); }
 .statuschip.warn { color: var(--warning); }
 .statuschip.crit { color: var(--danger); }
@@ -294,15 +393,19 @@ body {
   display: grid;
   place-items: center;
   flex-shrink: 0;
+  position: relative;
 }
 
 /* Registering the property lets the sweep be *transitioned*: without this the
    ring would jump once per second instead of gliding. Browsers without
    `@property` still render the correct end state (custom properties fall back to
-   plain token substitution), they just lose the tween. */
+   plain token substitution), they just lose the tween.
+
+   `inherits: true` is what lets the ticks and the leading dot follow the same
+   animated value as the ring itself — one animated source, three consumers. */
 @property --gauge-pct {
   syntax: "<number>";
-  inherits: false;
+  inherits: true;
   initial-value: 0;
 }
 
@@ -315,13 +418,26 @@ body {
   position: relative;
   --gauge-pct: 0;
   --gauge-color: var(--accent);
+  /* Faint at the start of the sweep, saturated at the head: a flat conic arc
+     reads as a progress bar, a shaded one reads as a dial. */
   background: conic-gradient(
+    from 0deg,
+    color-mix(in srgb, var(--gauge-color) 42%, var(--ring-bg)) 0,
     var(--gauge-color) calc(var(--gauge-pct) * 1%),
     var(--ring-bg) 0
   );
   transition: --gauge-pct 600ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* Groove: an inner shadow makes the ring sit *under* the glass rather than
+     being a flat sticker on top of it. */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 
+.app.dark .gauge {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* Halo. Pressure-coloured, and it breathes while memory is in the danger band
+   so the window says "something is wrong" without a single word. */
 .gauge::before {
   content: "";
   position: absolute;
@@ -329,20 +445,116 @@ body {
   border-radius: 50%;
   background: radial-gradient(closest-side, transparent 72%, var(--accent-glow) 100%);
   opacity: 0.8;
+  transition: background 400ms ease;
+}
+
+.gauge.crit::before,
+.gauge.warn::before {
+  background: radial-gradient(closest-side, transparent 66%, color-mix(in srgb, var(--gauge-color) 40%, transparent) 100%);
+}
+
+.gauge.crit::before {
+  animation: halo-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes halo-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+/* ===== Dial scale marks =====
+   A repeating conic gradient masked down to a thin band outside the ring:
+   transform-free, static, and reads as instrument detailing. */
+.gauge-ticks {
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: repeating-conic-gradient(
+    from 0deg,
+    var(--gauge-color) 0 0.4deg,
+    transparent 0.4deg 6deg
+  );
+  opacity: 0.3;
+  mask-image: radial-gradient(closest-side, transparent 87%, #000 88%, #000 94%, transparent 95%);
+  -webkit-mask-image: radial-gradient(closest-side, transparent 87%, #000 88%, #000 94%, transparent 95%);
+}
+
+/* ===== Leading dot =====
+   Rotating this layer by the same angle as the arc puts the dot exactly at the
+   head. A conic gradient can only ever have a square cut end, so this is what
+   gives the sweep a rounded cap. */
+.gauge-head {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  /* The angle is set inline from React; transitioning the transform keeps the
+     dot and the ring in step (both ease over the same 600ms curve). */
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gauge-head-dot {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 0 0 2.5px var(--gauge-color),
+    0 0 16px 2px var(--gauge-color);
 }
 
 .gauge-inner {
   width: 106px;
   height: 106px;
   border-radius: 50%;
-  background: var(--surface-solid);
+  /* A shallow radial gradient instead of a flat fill: the centre catches the
+     light, which is what makes a dial look convex. */
+  background: radial-gradient(
+    120% 120% at 50% 18%,
+    var(--surface-solid),
+    color-mix(in srgb, var(--surface-solid) 88%, var(--ring-bg))
+  );
   border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 1px;
-  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    inset 0 2px 12px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 0 var(--rim),
+    0 1px 0 0 rgba(255, 255, 255, 0.4);
+}
+
+/* Shockwave fired from the gauge after a full-success cleanup: one expanding
+   ring, then it removes itself (the element is re-keyed per cleanup). */
+.shockwave {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 136px;
+  height: 136px;
+  margin: -68px 0 0 -68px;
+  border-radius: 50%;
+  pointer-events: none;
+  border: 2px solid var(--accent);
+  animation: shockwave 0.72s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes shockwave {
+  from {
+    opacity: 0.75;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.75);
+  }
 }
 
 .gauge-value {
@@ -379,11 +591,17 @@ body {
   border-radius: var(--radius-sm);
   background: var(--surface2);
   border: 1px solid var(--border);
-  transition: border-color 0.15s ease;
+  /* The 1px inset highlight along the top edge is what separates a card from a
+     coloured rectangle: it reads as a lit rim. */
+  box-shadow: inset 0 1px 0 0 var(--rim);
+  transition: border-color 0.15s ease, transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.18s ease;
 }
 
 .metric:hover {
   border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 0 var(--rim), var(--shadow-sm);
 }
 
 .metric-icon {
@@ -430,22 +648,47 @@ body {
   color: var(--muted);
 }
 
+/* ===== Level bars =====
+   Each bar carries its own `--bar-color`, so the fill, the gradient and the
+   sweep can all be derived from one token instead of three hand-written
+   gradients. */
 .bar {
-  height: 3px;
+  height: 4px;
   background: var(--ring-bg);
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
 }
 
 .bar-fill {
+  position: relative;
   height: 100%;
-  border-radius: 2px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 86%, #fff), var(--accent));
-  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  border-radius: 3px;
+  overflow: hidden;
+  --bar-color: var(--accent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--bar-color) 52%, #fff), var(--bar-color));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--bar-color) 40%, transparent);
+  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1), background 0.3s ease;
 }
 
-.bar-fill.warn { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
-.bar-fill.danger { background: linear-gradient(90deg, #f87171, #ef4444); }
+/* A slow highlight travelling along the fill — the element says "live data"
+   without any JS. It is inert once the bar is at rest, since it is clipped by
+   the fill's own width. */
+.bar-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: translateX(-100%);
+  animation: bar-sheen 2.8s ease-in-out infinite;
+}
+
+@keyframes bar-sheen {
+  0% { transform: translateX(-100%); }
+  55%, 100% { transform: translateX(100%); }
+}
+
+.bar-fill.warn { --bar-color: var(--warning); }
+.bar-fill.danger { --bar-color: var(--danger); }
 
 /* ===== Regions panel ===== */
 .panel {
@@ -495,8 +738,10 @@ body {
   border-radius: 9px;
   background: var(--surface2);
   border: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 0 var(--rim);
   cursor: pointer;
-  transition: all 0.16s ease;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease,
+    transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.16s ease;
   /* The region toggle is a real <button role="checkbox"> for keyboard and
      screen-reader support, so the UA button styling has to be neutralised. */
   font: inherit;
@@ -509,6 +754,12 @@ body {
 .region:hover:not(:disabled) {
   border-color: var(--accent);
   background: var(--accent-soft);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 0 var(--rim), var(--shadow-sm);
+}
+
+.region:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
 }
 
 .region:focus-visible {
@@ -537,15 +788,35 @@ body {
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  transition: all 0.16s ease;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease,
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
   color: #fff;
   background: transparent;
+}
+
+/* The tick is drawn in rather than appearing: `pathLength=1` on the path lets a
+   single dash cover the whole stroke, so animating the offset *is* the draw.
+   `stroke: currentColor` is inherited from the svg element. */
+.region .check svg path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 0.28s cubic-bezier(0.4, 0, 0.2, 1) 0.06s;
 }
 
 .region.on .check {
   background: var(--accent-grad);
   border-color: transparent;
   box-shadow: 0 3px 8px var(--accent-glow);
+  transform: scale(1.04);
+}
+
+.region.on .check svg path {
+  stroke-dashoffset: 0;
+}
+
+.region.on {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .region-body {
@@ -1319,9 +1590,9 @@ input[type="color"] {
   border: 1px solid rgba(255, 255, 255, 0.65);
   backdrop-filter: blur(24px) saturate(1.6);
   -webkit-backdrop-filter: blur(24px) saturate(1.6);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), inset 0 1px 0 0 rgba(255, 255, 255, 0.7);
   pointer-events: auto;
-  animation: toastIn 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: toastIn 0.42s cubic-bezier(0.22, 1.4, 0.36, 1);
 }
 
 .app.dark .toast {
@@ -1370,6 +1641,19 @@ input[type="color"] {
   background: var(--accent);
   border-radius: 3px;
   transition: width 0.25s ease;
+  /* Moving stripes: a download that has stalled still looks alive, and the
+     stripes make progress readable at a glance on a 6px bar. */
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.28) 0 4px,
+    transparent 4px 8px
+  );
+  background-size: 200% 100%;
+  animation: stripe-scroll 0.7s linear infinite;
+}
+
+@keyframes stripe-scroll {
+  to { background-position: -16px 0; }
 }
 
 .toast-close {
@@ -1395,8 +1679,16 @@ input[type="color"] {
 }
 
 @keyframes toastIn {
-  from { transform: translateY(-16px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(-16px) scale(0.94);
+    opacity: 0;
+    filter: blur(6px);
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
 }
 
 /* Spinner (used by update check button) */
