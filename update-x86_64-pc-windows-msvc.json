@@ -1,11 +1,11 @@
 {
-  "version": "3.5.11",
-  "notes": "Mem Reduct 3.5.11\n\n- 修复检查更新发现新版不显示胶囊(冷启动首建丢失)\n- 检查更新加 30s 超时兜底(网络慢不再无限转圈)",
-  "pub_date": "2026-08-24T21:15:00Z",
+  "version": "3.5.13",
+  "notes": "Mem Reduct 3.5.13\n\n- 修复重复启动出现多个托盘图标、主界面清理区域选择不保存、全局热键失效无提示等问题\n- 新增单实例保护;配置值统一校验(0 阈值/0 间隔不再导致每 30 秒清理一次)\n- 清理失败会明确提示失败区域,命令行全部失败时返回退出码 1\n- 界面、托盘、热键、自动清理统一走同一套流程,托盘与热键清理也有结果提示",
+  "pub_date": "2026-09-15T03:06:23Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TW5hT2JSNFZEQkFzY21qenlEb2hXTmRhYTBseCtHb0FVb2VVM2lsSTdUUlRSd3B5WG10djBxamowRElhbnJPS0syWnpLcWlWOXJBQllhSjJBR0R4cWdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3NjIyMDE0CWZpbGU6TWVtIFJlZHVjdF8zLjUuMTFfeDY0LXNldHVwLmV4ZQppb0pJOWpqQitFOWlXcWJmWFpBMmV2WHNOZHFJVzMvUTR2WHRYbko2SFBrRTV1bTJxelBFK3JKOW1TV1diR3p2Y3FwOVcwNnREaTVSeEswVWFvYXZDUT09Cg==",
-      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.11/Mem.Reduct_3.5.11_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TW0zYitZcGlnNGFqYnE3eWxLVFJmQ0tHYWtES0hGTWRCdmtDQ2ttK1NnbmV5YzhsOE5iWHNlR0VTcGVyUkFTZmg5STQzOSs5S2R0OFZVcW5XaXRjdHdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NDQxNTIwCWZpbGU6TWVtIFJlZHVjdF8zLjUuMTNfeDY0LXNldHVwLmV4ZQppMjFWeVZyWnRBNEIzbFE5NUl6Wkd4QjRhOVZpRlBWQThveklWWHVjV1A3blZVVzlZcXFhSm5LeVlOakRQQ0dpOHJjVTExYXFlRUhnM1MzMnAvZjBCUT09Cg==",
+      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.13/Mem.Reduct_3.5.13_x64-setup.exe"
     }
   }
 }

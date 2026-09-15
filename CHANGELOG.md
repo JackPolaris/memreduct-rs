@@ -4,10 +4,10 @@
 [henrypp/memreduct](https://github.com/henrypp/memreduct),
 复刻其私有清理 API 与全部功能。所有版本均遵循 GPL-3.0。
 
-## v3.5.13 (未发布)
+## v3.5.13 (2026-09-15)
 
-> 发布前需同步版本号:`package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、
-> `src-tauri/tauri.conf.json`。
+> 版本号已同步至 `package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、
+> `src-tauri/Cargo.lock`、`src-tauri/tauri.conf.json`。
 
 ### 修复
 - **重复启动出现多个托盘图标**:新增单实例保护(`Local\` 命名互斥 + 等待语义),
