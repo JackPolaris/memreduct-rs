@@ -8,7 +8,7 @@ on:
 
 jobs:
   frontend:
-    name: Frontend typecheck
+    name: Frontend typecheck & build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,8 +17,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # `npm run build` runs `tsc` first, then `vite build`.
       - run: npm run build
-      - run: npx tsc --noEmit
+      # The icons have silently shipped blank twice; assert they are not.
+      - run: node scripts/verify_icon_png.mjs
 
   backend:
     name: Backend check & test
@@ -29,6 +31,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
       - name: Format check
         run: cargo fmt --check
         working-directory: src-tauri
@@ -51,12 +55,16 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
       - name: Install frontend deps
         run: npm ci
-      - name: Install Tauri CLI
-        run: npm install -g @tauri-apps/cli
+      # `tauri` is a devDependency, so `npx` resolves the pinned CLI version.
+      # CI only verifies that installers can be produced: updater artifacts
+      # require the release signing key, so they are disabled for this job
+      # (release builds use the default config plus TAURI_SIGNING_PRIVATE_KEY).
       - name: Build
-        run: npx tauri build
+        run: npx tauri build --config src-tauri/tauri.ci.conf.json
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

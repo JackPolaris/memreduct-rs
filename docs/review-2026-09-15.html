@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Mem Reduct (Tauri 重构版) 全面审查报告 — 2026-09-15</title>
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --card: #ffffff;
+    --ink: #16202e;
+    --ink-2: #4a5a6e;
+    --muted: #7b8899;
+    --line: #e3e9f1;
+    --accent: #2563eb;
+    --p0: #dc2626;
+    --p1: #ea7500;
+    --p2: #0891b2;
+    --ok: #0b9d5e;
+    --code: #f2f5f9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.65 "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 24px 72px; }
+  header { margin-bottom: 28px; }
+  h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -0.3px; }
+  .sub { color: var(--ink-2); font-size: 13.5px; }
+  .sub code { background: var(--code); padding: 1px 5px; border-radius: 5px; font-size: 12.5px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 12px; margin: 24px 0 32px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .stat b { display: block; font-size: 24px; line-height: 1.2; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .stat.ok b { color: var(--ok); }
+  .stat.p0 b { color: var(--p0); }
+  .stat.p1 b { color: var(--p1); }
+
+  h2 { font-size: 17px; margin: 36px 0 4px; padding-bottom: 8px; border-bottom: 2px solid var(--line); }
+  h2 .tag { font-size: 11.5px; font-weight: 600; color: var(--muted); margin-left: 8px; }
+  h3 { font-size: 14.5px; margin: 26px 0 8px; }
+
+  .item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 10px 0; }
+  .item h4 { font-size: 14px; margin: 0 0 8px; display: flex; gap: 8px; align-items: baseline; }
+  .item h4 .n { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .item p { margin: 6px 0; color: var(--ink-2); }
+  .item p.sym { color: var(--ink); }
+  .item p.fix { color: var(--ok); }
+  .sev { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; flex-shrink: 0; }
+  .sev.p0 { color: var(--p0); }
+  .sev.p1 { color: var(--p1); }
+  .sev.p2 { color: var(--p2); }
+  code, .path { font-family: "Cascadia Mono", Consolas, ui-monospace, monospace; font-size: 12.5px; background: var(--code); padding: 1px 5px; border-radius: 5px; }
+  .arrow { color: var(--muted); }
+  ul { margin: 8px 0 8px 20px; padding: 0; }
+  li { margin: 4px 0; color: var(--ink-2); }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 14px 0; }
+  .box.warn { border-left: 4px solid var(--p0); }
+  pre { background: #10161f; color: #d7e3f4; border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; }
+  pre .c { color: #7d8ea6; }
+  pre .g { color: #6ee7a8; }
+  footer { margin-top: 44px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Mem Reduct（Tauri v2 + React + Rust 重构版）全面审查报告</h1>
+  <p class="sub">
+    审查日期：2026-09-15 · 代码版本：<code>3.5.12</code>（工作区未提交状态）<br />
+    审查范围：<span class="path">src/</span>（前端 6 个源文件 + 4 份语言包 + 样式）、
+    <span class="path">src-tauri/src/</span>（后端 10 个模块）、<span class="path">scripts/</span>、
+    <span class="path">.github/</span>、构建与配置元数据。逐文件通读 + 实际编译/测试验证。
+  </p>
+</header>
+
+<div class="grid">
+  <div class="stat ok"><b>33</b><span>已直接修复的问题</span></div>
+  <div class="stat p0"><b>1</b><span>P0 待你处理（CI 会失败）</span></div>
+  <div class="stat p1"><b>10</b><span>待确认 / 建议项</span></div>
+  <div class="stat ok"><b>31</b><span>后端单测（原 22，全绿）</span></div>
+  <div class="stat"><b>0</b><span>clippy / fmt / tsc 告警</span></div>
+</div>
+
+<p class="sub">
+  说明：本报告只列出<strong>需要改动的问题</strong>。已确认正确的实现（原子写配置、NT API 掩码语义、
+  UAC 提权流程设计、托盘位图渲染、边界夹紧等）不再赘述。所有修复均通过验证命令，末尾附结果。
+</p>
+
+<h2>一、已修复 — 功能性缺陷 <span class="tag">会让程序表现错误，用户能直接感知</span></h2>
+
+<div class="item">
+  <h4><span class="n">1</span><span class="sev p0">P0</span>重复启动会出现多个托盘图标，且有两套后台循环互相抢图标</h4>
+  <p class="sym"><span class="path">src-tauri/src/lib.rs</span>、全项目无任何单实例判断。</p>
+  <p>现象：再点一次快捷方式 / 安装后自动启动 / IDE 里再跑一次，会在托盘出现第 2、第 3 个图标；
+     每个实例各有一个 1 Hz 后台线程，都在按自己的配置重绘同一个托盘、各自跑自动清理规则。</p>
+  <p class="fix">→ 新增 <span class="path">src-tauri/src/single_instance.rs</span>：<code>Local\</code> 命名互斥
+     （按会话隔离，多用户互不影响）。第二次启动不再“静默退出什么都不做”，而是用
+     <code>EnumWindows</code> + 按可执行文件路径匹配找到已有进程的窗口并唤起（用窗口类匹配是不可靠的：
+     所有 Tauri/WebView 应用的窗口类都叫 <code>WRY_WEBVIEW</code>）。<code>main()</code> 里的
+     <code>-clean*</code> / <code>-ensure-autostart</code> 等一次性助手路径刻意豁免，否则提权助手会被自己挡住。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">2</span><span class="sev p0">P0</span>手动清理提权重启时的竞态：新实例可能判定“已在运行”而退出</h4>
+  <p class="sym">引入单实例后暴露出来的连带问题（原实现没有单实例所以不存在），必须在同一次改动里解决。</p>
+  <p>手动清理未提权时，旧实例 <code>ShellExecuteW(runas)</code> 后立刻 <code>exit(0)</code>；
+     新实例可能在旧进程彻底退出前就启动。若只判断“互斥体已存在”，新实例会直接退出
+     —— 结果是应用彻底消失，比原来的重复图标严重得多。</p>
+  <p class="fix">→ 不用 <code>GetLastError()==ERROR_ALREADY_EXISTS</code> 做判断，改成
+     <code>WaitForSingleObject</code> 的等待语义：普通启动超时 0，提权交接
+     （<span class="path">elevation.rs</span> 传 <code>-takeover</code>）超时 15 s。
+     旧进程退出后内核释放互斥体，新实例拿到所有权继续启动。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">3</span><span class="sev p0">P0</span>主界面勾选的清理区域不保存，托盘/热键/自动清理用的是另一套掩码</h4>
+  <p class="sym"><span class="path">src/App.tsx</span> 的 <code>toggleRegion</code> 原来只改 React state，
+     从不写回 <code>config.reduct_mask</code>。</p>
+  <p>现象：主界面取消勾选“工作集”后点清理，本次生效；但托盘菜单清理、<code>Ctrl+F1</code>、
+     按阈值自动清理仍然用配置里的旧掩码。重启后主界面的勾选也全部丢失。</p>
+  <p class="fix">→ 勾选立即写回 <code>reduct_mask</code>（“全部/默认/无”三个按钮同样）。
+     另设 <code>maskRef</code> 保存最新掩码，避免设置面板 300 ms 防抖保存时把旧掩码
+     回写覆盖掉刚选好的区域。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">4</span><span class="sev p0">P0</span>配置值完全没有校验：0 值会让自动清理每 30 秒疯狂触发</h4>
+  <p class="sym"><span class="path">src-tauri/src/config.rs</span> 直接反序列化后使用，前端滑块也只限制在 UI 上。</p>
+  <p>可复现路径：<code>autoreduct_interval_value: 0</code>（手改 json，或旧版本留下）→
+     判断式 <code>elapsed &gt;= 0</code> 恒真 → 每个 30 秒冷却周期都执行一次 8 区域全量清理。
+     同理 <code>autoreduct_value: 0</code> 让阈值判断恒真；
+     <code>tray_level_warning &gt;= tray_level_danger</code> 会让托盘警告色永远不出现
+     （危险分支先命中）。<code>theme</code>/<code>accent_color</code>/<code>language</code>
+     还是任意字符串。</p>
+  <p class="fix">→ 新增 <code>Config::sanitize()</code>，在 <code>load()</code>、<code>save()</code>（落盘前）
+     与 <code>save_config</code> 命令三处统一夹紧：阈值 1–100、间隔 1–1440、警告级别强制 &lt; 危险级别、
+     theme/accent/language 白名单、掩码只保留 8 个已知位、托盘动作取值、无色值高位清零、
+     虚拟键为 0 的热键回退为 Ctrl+F1。<code>should_autoclean()</code> 另加一层防御式上限。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">5</span><span class="sev p0">P0</span>清理失败没有任何反馈，用户只看到“释放了 0 B”</h4>
+  <p class="sym"><span class="path">src-tauri/src/memory.rs</span> 中 8 个 NT 调用的返回码全部写成 <code>let _ = …</code>。</p>
+  <p>未提权、或用户取消了 UAC 时，<code>NtSetSystemInformation</code> 返回
+     <code>STATUS_PRIVILEGE_NOT_HELD</code>，被完全丢弃。界面/通知显示“释放了 0 B”，
+     用户无法区分“本来就没东西可清”和“根本没权限”，会认为工具坏了。</p>
+  <p class="fix">→ <code>CleanResult</code> 新增 <code>failed: string[]</code>，逐区域收集失败键；
+     界面提示追加“N 个失败”并在有失败时不再用绿色成功样式；
+     <code>-clean</code> 命令行在<strong>全部</strong>区域失败时返回退出码 1（原先恒为 0，脚本无法判断），
+     失败区域另打到 stderr。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">6</span><span class="sev p0">P0</span>卷缓存刷新盲目遍历 A:–Z:，可能卡死调用线程</h4>
+  <p class="sym"><span class="path">src-tauri/src/memory.rs</span> 的 <code>flush_volume_cache</code>。</p>
+  <p>对每个盘符无差别 <code>CreateFileW(\\?\X:\, GENERIC_WRITE)</code>。遇到空光驱（托盘无盘）、
+     已断开的映射网络盘、以及永不响应的设备时，这个调用会阻塞数秒；它跑在命令线程上，
+     表现为界面整个卡住。原版是枚举<strong>已挂载卷</strong>，不是猜盘符。</p>
+  <p class="fix">→ 改用 <code>GetLogicalDrives()</code> 只遍历真实存在的盘符，
+     再用 <code>GetDriveTypeW</code> 跳过 <code>DRIVE_CDROM</code> / <code>DRIVE_REMOTE</code> /
+     <code>DRIVE_NO_ROOT_DIR</code>。返回值改为 <code>bool</code>，打不开的卷计为失败区域（进第 5 条）。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">7</span><span class="sev p0">P0</span><code>lock().unwrap()</code> + <code>panic = "abort"</code>：一次 panic 会静默杀掉整个进程</h4>
+  <p class="sym">全项目 20 余处 <code>Mutex::lock().unwrap()</code>；<span class="path">src-tauri/Cargo.toml</span>
+     的 release 配置是 <code>panic = "abort"</code> + <code>strip = true</code>。</p>
+  <p>任何线程在持锁时 panic（后台线程、托盘回调、命令线程）都会毒化互斥体；
+     之后第一个取锁的地方会 panic，而 <code>abort</code> 让它变成一个<strong>没有窗口、没有日志的静默退出</strong>
+     —— 用户只会看到托盘图标凭空消失。项目本身在 CHANGELOG 里记录过这类“静默崩溃”，但没根治。</p>
+  <p class="fix">→ 新增 <code>lock_or_recover()</code> / <code>lock_config()</code>，用
+     <code>unwrap_or_else(|e| e.into_inner())</code> 从中毒状态恢复，替换了全部取锁点。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">8</span><span class="sev p0">P0</span>全局热键注册失败被静默吞掉，界面开关却显示“已启用”</h4>
+  <p class="sym"><span class="path">src-tauri/src/hotkey.rs</span>：<code>RegisterHotKey</code> 失败时直接
+     <code>return</code>，调用方无从得知。</p>
+  <p>组合键被其他程序占用（<code>Ctrl+F1</code> 很常见）时，用户打开开关、保存、看到开关是开的，
+     按下去毫无反应，没有任何解释。</p>
+  <p class="fix">→ <code>run_hotkey_loop</code> 改为 <code>start()</code>，注册在监听线程内完成
+     （<code>WM_HOTKEY</code> 只投递给注册它的线程队列），结果通过 channel 回传
+     <code>Result&lt;JoinHandle, HotkeyError&gt;</code>；<span class="path">lib.rs</span> 失败时
+     <code>emit("hotkey-error")</code>，前端弹出提示并同步发系统通知。新增
+     <code>HotkeyError</code> 枚举与「虚拟键为 0」的前置校验。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">9</span><span class="sev p1">P1</span>热键没有 <code>MOD_NOREPEAT</code>，长按会连续触发清理</h4>
+  <p class="sym"><span class="path">src-tauri/src/hotkey.rs</span> 注册时只映射了 Ctrl/Alt/Shift/Win 四个修饰位。</p>
+  <p>按住 <code>Ctrl+F1</code> 不放，Windows 会按系统重复频率（约 30 ms）持续投递 <code>WM_HOTKEY</code>，
+     等于每 30 ms 做一次全量内存清理 —— 这个操作会清空所有进程工作集，后果不小。
+     另外 <code>should_autoclean</code> 的 30 s 冷却只约束自动清理，管不到热键。</p>
+  <p class="fix">→ 注册时 OR 上 <code>MOD_NOREPEAT</code>（<code>windows</code> 0.58 已提供该常量）。
+     该位只在注册时叠加，不进配置编码，有单测固定 <code>(mods&lt;&lt;16)|vk</code> 的编码不被污染。</p>
+</div>
+
+<h2>二、已修复 — 不合理设计与一致性问题 <span class="tag">能用但明显别扭</span></h2>
+
+<div class="item">
+  <h4><span class="n">10</span><span class="sev p1">P1</span>清理入口各写各的：托盘与热键从不更新时间戳、不落盘、不同步界面</h4>
+  <p class="sym">原先 <code>memory::clean_memory</code> 有三组调用方：
+     界面命令（更新时间戳 + 落盘）、<code>clean_from_tray</code>（只 emit 内存信息）、
+     热键回调（什么都不做）、后台自动清理（自己更新时间戳 + 落盘 + emit）。</p>
+  <p>后果：间隔式自动清理可能在手动/托盘清理几秒后又触发一次（时间戳没被刷新）；
+     托盘清理的结果界面上看不到任何反馈；同一份配置被两条路径以不同顺序写盘。</p>
+  <p class="fix">→ 统一为 <code>lib.rs::perform_clean(app, mask, source, is_autoclean)</code>：
+     读配置 → 清理 → 更新时间戳并落盘 → emit <code>memory-update</code> →
+     emit 新的 <code>clean-done{source,result}</code> 事件。前端监听 <code>clean-done</code>
+     为非 <code>manual</code> 来源补上气泡与系统通知，托盘/热键清理终于有反馈了。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">11</span><span class="sev p1">P1</span>主界面用硬编码 70/90，与托盘里可配置的阈值不一致</h4>
+  <p class="sym"><span class="path">src/App.tsx</span> 的 <code>colorForPercent</code> 与 <code>MetricCard</code>
+     写死 90/70；托盘的 <code>tray_level_warning</code> / <code>tray_level_danger</code> 是设置项。</p>
+  <p>把危险级别改到 80 之后，托盘图标 80% 就变红，主界面仪表环还是绿的 —— 同一个数据两个结论。</p>
+  <p class="fix">→ 抽出 <code>pressureColor(pct, warn, danger)</code> 与 <code>pressure</code> 判定，
+     全部改用配置值（含三个迷你进度条），颜色改为引用 CSS 变量 <code>var(--accent/warning/danger)</code>，
+     不再散落硬编码色值。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">12</span><span class="sev p1">P1</span>当前系统不支持的区域照常可选，勾了却什么也不发生</h4>
+  <p class="sym"><code>get_os_info</code> 命令（返回 <code>is_win8_1</code> / <code>is_win10</code>）
+     在后端<strong>暴露了但前端从未调用</strong>；<code>regions.ts</code> 只把“需 Win10+”
+     当静态小字显示。</p>
+  <p>在 Win8.1 上勾选“注册表缓存”“合并内存列表”，后端会静默跳过（<code>is_win8_1_plus() &amp;&amp; …</code>），
+     界面却把它们算进“已选 8/8”，用户不知道有 2 个从未执行。</p>
+  <p class="fix">→ <code>regions.ts</code> 为每个区域补 <code>min: "any"|"win81"|"win10"</code>，
+     新增 <code>isRegionSupported()</code> / <code>supportedMask()</code>；
+     主界面禁用不支持的区域、把提示改成“当前系统不支持”、计数分母改为“受支持的区域数”，
+     并且 <code>supportedMask()</code> 会把这些位从提交给后端的掩码中剔除。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">13</span><span class="sev p1">P1</span>清理区域开关无法用键盘操作，读屏软件也读不到</h4>
+  <p class="sym"><span class="path">src/App.tsx</span> 的 <code>RegionCard</code> 是
+     <code>&lt;label onClick&gt;</code>，内部既没有 <code>input</code>，也没有 <code>tabIndex</code>。</p>
+  <p>八个清理区域是主界面最核心的交互，却只能用鼠标点。<code>&lt;label&gt;</code> 默认不进入 Tab 序列，
+     没有 <code>role</code>，读屏软件只会读出一段文本。确认弹窗也只能点遮罩关闭，Esc 无效。</p>
+  <p class="fix">→ 改为 <code>&lt;button type="button" role="checkbox" aria-checked&gt;</code>，
+     补 <code>:focus-visible</code> 焦点环与 <code>:disabled</code> 态样式（CSS 里同步中和了
+     <code>&lt;button&gt;</code> 的默认外观）；确认弹窗加 <code>role="dialog" aria-modal</code> 与 Esc 关闭。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">14</span><span class="sev p1">P1</span>托盘单击与双击冲突：把双击设成“清理内存”会先把窗口弹出来</h4>
+  <p class="sym"><span class="path">src-tauri/src/tray.rs</span> 的 <code>on_tray_icon_event</code>。</p>
+  <p>Windows 一定会先投递一次单击事件、再投递双击事件。原实现单击立刻“显示窗口”、
+     双击再执行配置动作，所以只要双击动作不是“显示窗口”，双击就必然伴随一次窗口弹出。</p>
+  <p class="fix">→ 若双击动作就是“显示窗口”则单击立即响应（不牺牲手感）；
+     否则单击推迟一个系统双击间隔执行，并在检测到双击时用 <code>AtomicU64</code> 令牌取消。
+     间隔取自 <code>GetDoubleClickTime()</code> 并夹在 200–1000 ms，避免异常系统设置把单击动作变成“没反应”。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">15</span><span class="sev p2">P2</span>Windows 上 <code>TrayIcon::set_title</code> 是空实现，相关代码是死代码</h4>
+  <p class="sym">已核对依赖源码 <code>tray-icon-0.24.2/src/platform_impl/windows/mod.rs:287</code>：
+     <code>pub fn set_title&lt;S: AsRef&lt;str&gt;&gt;(&amp;mut self, _title: Option&lt;S&gt;) {}</code>。</p>
+  <p>每秒 tick 里调用的 <code>tray.set_title(Some("87%"))</code> 在 Windows 上什么也不做，
+     <code>TrayIconBuilder::title("0%")</code> 同样。真正的百分比是通过渲染位图与 tooltip 传达的
+     （这两者确实生效），但代码会让人误以为图标旁有文字标签。</p>
+  <p class="fix">→ 删除 <code>set_title</code> 调用与 <code>title("0%")</code>，并加注释说明原因，
+     避免以后有人再“补”回来。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">16</span><span class="sev p1">P1</span>关闭窗口无任何提示，用户以为程序退出了</h4>
+  <p class="sym"><span class="path">src-tauri/src/lib.rs</span> 的 <code>on_window_event</code>：
+     <code>CloseRequested</code> → <code>prevent_close()</code> + <code>hide()</code>，仅此而已。</p>
+  <p>点右上角 × 后窗口消失、托盘还在，但没有任何一句话告诉用户“程序仍在运行、退出请用托盘菜单”。
+     这是托盘类应用最常见的困惑点。</p>
+  <p class="fix">→ 新增配置项 <code>tray_tip_shown</code>，首次关闭时
+     <code>emit("hidden-to-tray")</code>，前端弹出气泡 + 系统通知（文案在 i18n 里，四语言齐全）。
+     只提示一次，不打扰。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">17</span><span class="sev p2">P2</span>托盘菜单“官方网站/Website”实际打开的是 GitHub 仓库</h4>
+  <p class="sym"><span class="path">src/i18n/*.json</span> 的 <code>tray.website</code> 与
+     <span class="path">src-tauri/src/tray.rs</span> 里的 <code>PROJECT_URL</code>。</p>
+  <p>菜单项写着“官方网站 / Website / 公式サイト”，点击落到
+     <code>github.com/JackPolaris/memreduct-rs</code>（项目主页，不是官网）。
+     设置页的“关于”里同一个链接却写着“项目主页”，同一事实两种说法。</p>
+  <p class="fix">→ 四语言统一改为“项目主页 / 專案主頁 / Project page / プロジェクトページ”，
+     并把 URL 提为具名常量 <code>PROJECT_URL</code>。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">18</span><span class="sev p2">P2</span>清理区域顺序前后端不一致</h4>
+  <p class="sym"><span class="path">src-tauri/src/memory.rs::mask::names()</span> 的顺序是
+     工作集→系统文件缓存→修改文件缓存→修改页列表→待机列表→低优先级待机→注册表→合并列表；
+     <span class="path">src/regions.ts</span> 是另一套顺序。</p>
+  <p><code>CleanResult.regions</code> 是与界面同源的区域清单，顺序不一致会让“按结果回显区域列表”
+     这类后续功能出现错位。目前只用了 <code>.length</code>，属于潜伏问题。</p>
+  <p class="fix">→ 后端顺序对齐前端，并加单测 <code>mask_names_order_matches_frontend_regions</code> 固定该约定。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">19</span><span class="sev p1">P1</span>更新清单地址写死 x86_64</h4>
+  <p class="sym"><span class="path">src-tauri/src/updater.rs</span> 硬编码
+     <code>update-x86_64-pc-windows-msvc.json</code>；而 <code>tauri.conf.json</code> 的
+     <code>bundle.targets = "all"</code>。</p>
+  <p>在 Windows on ARM（aarch64）或 32 位包上运行，检查更新会 404 —— 表现为“检查更新失败”，
+     用户看不出是架构不匹配。</p>
+  <p class="fix">→ 新增 <code>target_triple()</code>，按 <code>std::env::consts::ARCH</code>
+     映射 <code>x86_64</code> / <code>aarch64</code> / <code>i686</code>，地址由
+     <code>manifest_url()</code> 生成。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">20</span><span class="sev p2">P2</span>英文包 <code>status.warn</code> 译成 “Elevated”（权限语义）</h4>
+  <p class="sym"><span class="path">src/i18n/en-US.json</span>：<code>"warn": "Elevated"</code>；
+     zh-CN 是“内存偏高”，ja-JP 是“高い”，只有英文串到了权限相关词汇。</p>
+  <p>内存占用 70–90% 时，英文用户看到的状态徽章是 “Elevated”，而同一屏的权限徽章也是
+     “Administrator”，语义直接冲突。</p>
+  <p class="fix">→ 改为 <code>"High"</code>。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">21</span><span class="sev p2">P2</span>挂载时的闭包捕获旧 <code>t</code>，更新提示会用启动时的语言</h4>
+  <p class="sym"><code>useEffect(…, [])</code> 里捕获了首帧的 <code>startUpdateInstall</code>，
+     它内部用了 <code>t</code>；而该 effect 只在挂载时执行一次。</p>
+  <p>启动后把语言从中文切到 English，再点更新胶囊的“下载安装”，进度提示仍是中文。</p>
+  <p class="fix">→ 命令式回调改用始终最新的 <code>i18n.t</code>；另用 <code>tRef</code> /
+     <code>balloonCleanResultsRef</code> 让挂载期注册的事件监听器读到最新的语言与通知开关。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">22</span><span class="sev p2">P2</span>系统版本每次清理都重复查询</h4>
+  <p class="sym"><code>clean_memory</code> 会调 <code>is_win8_1_plus()</code> 与
+     <code>is_win10_plus()</code>，二者内部各自 <code>RtlGetVersion</code> 一次。</p>
+  <p>版本号在一个进程生命周期内不可能变化，属于纯浪费（虽然单次开销很小）。</p>
+  <p class="fix">→ 用 <code>OnceLock</code> 缓存 <code>os_version()</code> 结果。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">23</span><span class="sev p2">P2</span>页文件解析中的冗余分支</h4>
+  <p class="sym"><span class="path">src-tauri/src/memory.rs::read_pagefile_info</span>：
+     <code>if entry.NextEntryOffset == 0 &amp;&amp; !first { break; }</code> 紧跟
+     <code>if entry.NextEntryOffset == 0 { break; }</code>。</p>
+  <p>第一个 <code>first</code> 变量对结果没有任何影响，纯噪音（且循环结构不一致，容易改错）。</p>
+  <p class="fix">→ 改为统一的 <code>loop</code> + 边界检查，语义与原实现等价。</p>
+</div>
+
+<h2>三、已修复 — 死代码与重复实现 <span class="tag">这次一并清掉</span></h2>
+
+<div class="item">
+  <h4><span class="n">24</span><span class="sev p2">P2</span>四个前后端“看起来存在但其实不存在/永远为假”的字段</h4>
+  <ul>
+    <li><code>CleanResult.elevation_requested</code>（Rust）：唯一赋值处恒为 <code>false</code>，
+        因为提权路径走的是“整个进程重启并 <code>exit(0)</code>”，根本不会返回结果。
+        连带前端分支与 <code>main.elevationRequested</code> 四语言文案一起删除。</li>
+    <li><code>Config.tray_use_antialiasing</code>（<span class="path">src/api.ts</span>）：
+        后端 <code>Config</code> 结构体里<strong>没有这个字段</strong>，CHANGELOG 也写明已移除，
+        但 TS 类型一直保留着它。删除。</li>
+    <li><code>config::color_to_hex</code>：只有它自己的单测在调用，前端另有 <code>configHex()</code>。删除。</li>
+    <li><code>regions.ts</code> 的 <code>maskNames()</code>、<code>MASK_FREEZES</code>：无任何引用。删除。</li>
+  </ul>
+  <p class="fix">→ 全部清理。<code>api.ts</code> 的 <code>Config</code> 现在与后端逐字段一致，
+     并补上新增的 <code>tray_tip_shown</code>。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">25</span><span class="sev p2">P2</span><code>ShellExecuteW("open")</code> 被复制了两份</h4>
+  <p class="sym"><span class="path">src-tauri/src/lib.rs</span> 的 <code>open_external</code> 与
+     <span class="path">src-tauri/src/tray.rs</span> 的 <code>open_url</code> 是同一段不安全的
+     Win32 调用（含同样的 <code>static OPEN: [u16; 5]</code> 硬编码 ASCII）。</p>
+  <p class="fix">→ 抽出 <code>pub fn shell_open(target: &amp;str) -&gt; bool</code>，两处共用。</p>
+</div>
+
+<h2>四、已修复 — 工具链与文档 <span class="tag">这里的问题比代码更严重</span></h2>
+
+<div class="item">
+  <h4><span class="n">26</span><span class="sev p1">P1</span>图标校验脚本从不失败——它是一个“假校验”</h4>
+  <p class="sym"><span class="path">scripts/verify_icon_png.mjs</span>：只 <code>console.log</code> 像素值，
+     最后打印一句 “expected purple center …, must NOT be 0,0,0,0 blank”，<strong>没有任何断言、从不 exit 1</strong>。</p>
+  <p>实测运行输出：<code>center=51,102,255,255</code> —— 是蓝色的，而脚本注释写的是“校验品牌紫色”。
+     它既没拦住历史上的空白图标，也在“校验”一个错误的颜色。</p>
+  <p class="fix">→ 改为真校验：统计不透明像素占比（阈值 5%，实测品牌图形覆盖 31–38%，
+     失败模式即“完全空白 = 0%”）并额外要求中心像素不透明，任一不满足即退出码 1；
+     同时把该步骤加进 CI 前端任务。
+     <em>（第一版把阈值设成 50%，跑起来直接判现有图标不合格 —— 说明“凭直觉定阈值”也会误报，
+     已按实测覆盖率修正。）</em></p>
+</div>
+
+<div class="item">
+  <h4><span class="n">27</span><span class="sev p1">P1</span><code>extract_ico_frame.py</code> 在 Windows 上必然崩溃</h4>
+  <p class="sym"><span class="path">scripts/extract_ico_frame.py</span> 末行
+     <code>open("/tmp/ico_frame.png", "wb")</code>。</p>
+  <p>本项目只构建 Windows 版本，而 Windows 上没有 <code>/tmp</code>。实测：
+     <code>FileNotFoundError: [Errno 2] No such file or directory: '/tmp/ico_frame.png'</code>。</p>
+  <p class="fix">→ 改用 <code>tempfile.gettempdir()</code>，并支持 <code>argv[1]</code> 指定路径；
+     顺手把路径基准改为基于脚本位置（原实现依赖当前工作目录），并把“最后一帧”修正为“最大帧”
+     （原注释说要 128/256 帧，代码取 <code>entries[-1]</code>，两者不一定一致）。</p>
+</div>
+
+<div class="item">
+  <h4><span class="n">28</span><span class="sev p1">P1</span>三套图标生成链路产物同名、颜色互不相同；README 的描述与事实相反</h4>
+  <p class="sym"><code>render_from_png.mjs</code>、<code>render_icon.mjs</code>、<code>make_icon_png.py</code>
+     都会覆写 <code>src-tauri/icons/</code> 下同样的 5 个 PNG，但分别产出<strong>蓝色 / 紫色 / 紫色</strong>图标。</p>
+  <p>实测证据：<br />
+     · 发行版 <code>icon.png</code> 中心像素 = <code>51,102,255</code>（<strong>蓝 #3366FF</strong>），
+       与 <code>assets/icon-reference.png</code> 一致 → 有效链路是 <code>render_from_png.mjs</code>；<br />
+     · <code>assets/icon.svg</code> 里唯一的填充色是 <code>#676EBB</code>（<strong>紫</strong>）→
+       <code>render_icon.mjs</code> 与 <code>icon.svg</code> 已与发行版脱节；<br />
+     · 而 <code>README.md</code> 写着“<code>assets/icon.svg</code> 为唯一源，
+       <code>icon-reference.png</code> 为参考位图”—— 正好说反了。</p>
+  <p class="fix">→ 新增 <span class="path">scripts/README.md</span>：分组列出“当前有效链路”
+     与“已废弃/仅诊断”，标注每套脚本的输入输出与误用后果，并直接指出 README 的错误说法；
+     同步修正 <code>README.md</code> 与 <code>CONTRIBUTING.md</code> 的对应描述。
+     未删除/未移动任何脚本（见待确认项）。</p>
+</div>
+
+<h2>五、验证结果</h2>
+
+<pre><span class="c"># 后端</span>
+cargo fmt --check                              → <span class="g">clean</span>
+cargo clippy --all-targets -- -D warnings      → <span class="g">clean（0 warning）</span>
+cargo test                                     → <span class="g">31 passed / 0 failed</span>（改动前 22 个）
+
+<span class="c"># 前端</span>
+npm run build  <span class="c">（tsc + vite build）</span>            → <span class="g">success，72 modules，236 kB js / 18 kB css</span>
+
+<span class="c"># 语言包一致性（脚本比对 4 份 JSON 的扁平键集合）</span>
+zh-CN / zh-TW / en-US / ja-JP                  → <span class="g">各 110 键，缺失 0，多余 0</span>
+
+<span class="c"># 图标</span>
+node scripts/verify_icon_png.mjs               → <span class="g">ok  三张图标 opaque=31.6–37.5%，中心不透明</span>
+python scripts/extract_ico_frame.py            → <span class="g">正常输出帧表并导出到系统临时目录（原为崩溃）</span></pre>
+
+<p class="sub">新增单测覆盖：配置夹紧（3 例）、自动清理 0 值防御、热键编码/无效组合/编译位隔离、
+掩码顺序一致性、单实例获取与释放、无对端时的窗口聚焦、死代码移除后的等价性。</p>
+
+<h2>六、待你决定 <span class="tag">我没有擅自改动</span></h2>
+
+<div class="box warn">
+  <h4 style="margin-top:0"><span class="sev p0">P0</span> CI 里引用的 <code>tauri.ci.conf.json</code> 没有入库 → Windows 构建任务必然失败</h4>
+  <p><span class="path">.github/workflows/ci.yml</span> 的 build 任务执行
+     <code>npx tauri build --config src-tauri/tauri.ci.conf.json</code>，
+     但该文件<strong>不在 git 索引里</strong>（<code>git ls-files</code> 查不到，也不被 .gitignore 忽略）。
+     全新 clone / CI checkout 上这个路径不存在，构建任务会直接失败。</p>
+  <p><strong>需要你执行</strong>：<code>git add src-tauri/tauri.ci.conf.json</code>。
+     我刻意没有动 git 索引（你工作区里有大量未提交改动，不该由我决定哪些进下一次提交）。</p>
+</div>
+
+<div class="box">
+  <h4 style="margin-top:0"><span class="sev p1">P1</span> <code>tauri.conf.json</code> 的 <code>csp</code> 仍为 <code>null</code></h4>
+  <p>WebView 当前没有任何内容安全策略。收紧要至少放开 <code>ipc:</code> / <code>http://ipc.localhost</code>
+     连接与内联样式（React 的 <code>style={{…}}</code> 与 <code>setProperty</code> 需要
+     <code>style-src 'unsafe-inline'</code>）。<strong>配错会直接白屏</strong>，而我在这个环境里
+     无法启动 GUI 验证，因此没有盲改。建议按下面这版改完后实机跑一遍：</p>
+  <pre>"security": {
+  "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; connect-src ipc: http://ipc.localhost"
+}</pre>
+</div>
+
+<div class="box">
+  <h4 style="margin-top:0"><span class="sev p1">P1</span> 仓库根的更新清单版本落后于包版本</h4>
+  <p><span class="path">update-x86_64-pc-windows-msvc.json</span> 里是 <code>3.5.11</code>，
+     而 <code>package.json</code> / <code>Cargo.toml</code> / <code>tauri.conf.json</code> 都已是
+     <code>3.5.12</code>。它是带签名的发布清单副本，手工改版本号会让签名与安装包不对应，
+     所以我没有动它 —— 建议发布时用新生成的 <code>latest.json</code> 覆盖，
+     或干脆把它移出仓库（README 已说明它只是“便于对照格式的副本”）。</p>
+</div>
+
+<div class="box">
+  <h4 style="margin-top:0"><span class="sev p2">P2</span> 其余建议（未改动）</h4>
+  <ul>
+    <li><strong>废弃图标脚本的归置</strong>：已用 <span class="path">scripts/README.md</span> 标注，
+        但没有删除或移动任何文件（避免误删你仍在使用的东西）。确认有效链路后，
+        可把 <code>render_icon.mjs</code>/<code>make_icon_png.py</code>/<code>make_icon.py</code>/
+        <code>check_icon_png.mjs</code>/<code>make_ico.py</code> 移到 <code>scripts/legacy/</code>，
+        并从 devDependencies 移除 <code>@resvg/resvg-js</code>（仅 <code>render_icon.mjs</code> 使用）。</li>
+    <li><strong>三处白名单靠人工同步</strong>：主题色/语言/主题名分别定义在
+        <code>config.rs</code>、<code>accents.ts</code>、<code>i18n/index.ts</code>。
+        建议加一个 CI 步骤比对三者，避免以后加一种语言却忘记放开后端白名单
+        （那样配置会被 <code>sanitize()</code> 静默改回 zh-CN）。</li>
+    <li><strong>未提权时托盘/热键清理仍无提示</strong>：现在会通过 <code>failed</code> 列表在气泡里
+        显示“N 个失败”，但不会主动请求提权（界面手动清理才会触发 UAC 重启）。
+        如果希望托盘路径也能一键提权，需要单独设计（不能像手动清理那样重启整个进程，
+        否则会打断托盘会话）。</li>
+    <li><strong>窗口位置/大小不记忆</strong>：<code>tauri.conf.json</code> 固定 <code>center: true</code>，
+        每次启动都回到屏幕中央。原版 Mem Reduct 会记住，属可选增强。</li>
+    <li><strong><code>enable_memory_privileges()</code> 忽略 <code>ERROR_NOT_ALL_ASSIGNED</code></strong>：
+        <code>AdjustTokenPrivileges</code> 即使一个权限都没授予也返回成功（真值在 <code>GetLastError</code>）。
+        当前后果已被 <code>failed</code> 列表兜住，属可选加固。</li>
+    <li><strong><code>src-tauri/gen/</code> 被 gitignore</strong>：Tauri v2 惯例是提交
+        <code>gen/schemas</code>，这样编辑器里 <code>tauri.conf.json</code> /
+        <code>capabilities/*.json</code> 有补全和校验。构建会自动重新生成，所以不影响编译。</li>
+    <li><strong>没有任何 UI 自动化测试</strong>：所有前端行为（托盘菜单、更新流程、设置持久化）
+        都要手工点。若要长期维护，建议加一个最小 Playwright/WebDriver 冒烟用例，
+        至少覆盖“加载 → 切设置 → 改语言 → 保存”。</li>
+  </ul>
+</div>
+
+<footer>
+  本报告与本次代码改动同步产出。改动详情见 <code>CHANGELOG.md</code> 的 v3.5.13（未发布）段落；
+  项目级约定（前后端契约、区域顺序、锁的使用、图标链路）已写入
+  <code>.workbuddy/memory/MEMORY.md</code>，供后续会话直接遵循。
+</footer>
+
+</div>
+</body>
+</html>

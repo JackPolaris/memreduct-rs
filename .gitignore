@@ -24,3 +24,9 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Agent/tool scratch state
+.reasonix/
+
+# WorkBuddy project memory/state
+.workbuddy/

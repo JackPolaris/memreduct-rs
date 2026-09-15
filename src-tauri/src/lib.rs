@@ -10,6 +10,7 @@ pub mod elevation;
 pub mod hotkey;
 pub mod memory;
 pub mod ntapi;
+pub mod single_instance;
 pub mod tray;
 pub mod trayicon;
 pub mod updater;
@@ -17,10 +18,11 @@ pub mod updater;
 use config::Config;
 use memory::{CleanResult, MemoryInfo};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tauri::tray::TrayIcon;
 use tauri::{AppHandle, Emitter, Manager, State};
+
 /// Serializable OS info.
 #[derive(Debug, serde::Serialize)]
 pub struct OsInfo {
@@ -34,7 +36,64 @@ pub struct OsInfo {
 pub struct AppState {
     pub config: Mutex<Config>,
     tray: Mutex<Option<TrayIcon>>,
-    hotkey_stop: Mutex<Option<Arc<AtomicBool>>>,
+    hotkey: Mutex<Option<HotkeyHandle>>,
+}
+
+/// A running global-hotkey listener: its stop flag plus the thread handle, so
+/// re-registration can *wait* for the previous `RegisterHotKey` to be released.
+struct HotkeyHandle {
+    stop: Arc<AtomicBool>,
+    join: Option<std::thread::JoinHandle<()>>,
+}
+
+/// Lock a mutex, recovering from poisoning instead of panicking.
+///
+/// Every bare `.lock().unwrap()` is a landmine in this app: a panic anywhere
+/// while the lock is held poisons the mutex, and the release profile uses
+/// `panic = "abort"`, so the *next* lock attempt would silently kill the whole
+/// process — including its tray icon — instead of degrading.
+fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Lock the app config.
+pub(crate) fn lock_config(state: &AppState) -> MutexGuard<'_, Config> {
+    lock_or_recover(&state.config)
+}
+
+/// Run a cleanup and keep the shared bookkeeping in sync.
+///
+/// The UI button, the tray menu, the global hotkey and the automatic loop all
+/// funnel through here so the "last reduct" timestamp, the persisted config and
+/// the `memory-update` event cannot drift apart between entry points — the tray
+/// and hotkey paths used to skip the bookkeeping entirely, so an
+/// interval-based auto-clean could fire seconds after a manual cleanup.
+///
+/// Always emits `clean-done` carrying the originating `source`; the frontend
+/// ignores `"manual"` because that caller already gets the result back from the
+/// `clean_memory` command.
+fn perform_clean(app: &AppHandle, mask: u32, source: &str, is_autoclean: bool) -> CleanResult {
+    let allow_standby = lock_config(&app.state::<AppState>()).allow_standby_list_cleanup;
+    let result = memory::clean_memory(mask, allow_standby, is_autoclean);
+
+    {
+        let state = app.state::<AppState>();
+        let mut cfg = lock_config(&state);
+        cfg.statistic_last_reduct = unix_now();
+        // A failed write must not take the cleanup down with it.
+        let _ = config::save(&cfg);
+    }
+
+    let _ = app.emit("memory-update", memory::get_memory_info());
+    let _ = app.emit(
+        "clean-done",
+        // Borrow the result so it can still be returned to a command caller.
+        serde_json::json!({ "source": source, "result": &result }),
+    );
+
+    result
 }
 
 #[tauri::command]
@@ -50,23 +109,27 @@ fn is_elevated() -> bool {
 
 #[tauri::command]
 fn clean_memory(
+    app: AppHandle,
     state: State<'_, AppState>,
     mask: Option<u32>,
     source: Option<String>,
 ) -> CleanResult {
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = lock_config(&state).clone();
     let mask = mask.unwrap_or(cfg.reduct_mask);
     let is_manual = source.as_deref() == Some("manual");
     let is_autoclean = matches!(
         source.as_deref(),
         Some("auto") | Some("hotkey") | Some("cmdline")
     );
-    let allow_standby = cfg.allow_standby_list_cleanup;
 
     // Original Mem Reduct behaviour: a manual cleanup while un-elevated
     // relaunches the WHOLE app through the UAC `runas` verb and exits this
     // instance. The elevated instance takes over, so every later cleanup
     // (manual or automatic) runs elevated with no further UAC prompts.
+    //
+    // The replacement is started with `-takeover`, which lets it wait for *this*
+    // process to disappear instead of concluding "another instance is already
+    // running" and quitting (see `single_instance`).
     if is_manual && !elevation::is_elevated() && elevation::relaunch_self_as_admin() {
         // Successful relaunch: the elevated instance takes over.
         std::process::exit(0);
@@ -74,31 +137,35 @@ fn clean_memory(
     // User cancelled the UAC prompt → fall through to a limited attempt
     // below (mirrors the original's "no privileges" path).
 
-    let result = memory::clean_memory(mask, allow_standby, is_autoclean);
-
-    // Update statistic timestamp.
-    let mut guard = state.config.lock().unwrap();
-    guard.statistic_last_reduct = unix_now();
-    if config::save(&guard).is_err() {
-        // Non-fatal: config save failure shouldn't crash cleaning.
-    }
-    drop(guard);
-
-    result
+    let source = source.unwrap_or_else(|| "manual".to_string());
+    perform_clean(&app, mask, &source, is_autoclean)
 }
 
 #[tauri::command]
 fn get_config(state: State<'_, AppState>) -> Config {
-    state.config.lock().unwrap().clone()
+    lock_config(&state).clone()
 }
 
 #[tauri::command]
 fn save_config(app: AppHandle, state: State<'_, AppState>, config: Config) -> Result<(), String> {
-    let _ = config::save(&config).map_err(|e| e.to_string());
-    *state.config.lock().unwrap() = config;
-    // Live-applying config: re-register the global hotkey.
-    register_hotkey(&app);
-    Ok(())
+    // Only re-arm the global hotkey when it actually changed: the setting is
+    // saved on every tweak (sliders included), and re-registering costs a
+    // thread round-trip.
+    let hotkey_changed = {
+        let current = lock_config(&state);
+        current.hotkey_clean_enable != config.hotkey_clean_enable
+            || current.hotkey_clean != config.hotkey_clean
+    };
+    // The frontend round-trips whatever it last received, so a stale or
+    // hand-edited payload must be normalised before it reaches the rest of the
+    // app. `config::save` sanitises again on the way to disk.
+    let mut config = config;
+    config.sanitize();
+    *lock_config(&state) = config.clone();
+    if hotkey_changed {
+        register_hotkey(&app);
+    }
+    config::save(&config).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -126,30 +193,40 @@ fn get_version(app: AppHandle) -> String {
     app.package_info().version.to_string()
 }
 
-/// Open an external URL in the default browser.
-#[tauri::command]
-fn open_external(url: String) -> Result<(), String> {
+/// Open a URL / file with the default system handler.
+///
+/// Shared by the `open_external` command and the tray's "project page" entry —
+/// those two used to carry identical copies of this `ShellExecuteW` dance.
+pub fn shell_open(target: &str) -> bool {
     use windows::core::PCWSTR;
     use windows::Win32::UI::Shell::ShellExecuteW;
     use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
-    let wide: Vec<u16> = url.encode_utf16().chain(core::iter::once(0)).collect();
-    static OPEN: [u16; 5] = [0x6f, 0x70, 0x65, 0x6e, 0x00]; // "open\0"
+    let wide: Vec<u16> = target.encode_utf16().chain(core::iter::once(0)).collect();
+    let verb: Vec<u16> = "open".encode_utf16().chain(core::iter::once(0)).collect();
 
-    unsafe {
-        let r = ShellExecuteW(
+    // SAFETY: both buffers are NUL-terminated and outlive the call.
+    let result = unsafe {
+        ShellExecuteW(
             None,
-            PCWSTR(OPEN.as_ptr()),
+            PCWSTR(verb.as_ptr()),
             PCWSTR(wide.as_ptr()),
             PCWSTR::null(),
             PCWSTR::null(),
             SW_SHOWNORMAL,
-        );
-        if r.0 as isize > 32 {
-            Ok(())
-        } else {
-            Err("打开链接失败".into())
-        }
+        )
+    };
+    // ShellExecuteW returns a value greater than 32 on success.
+    result.0 as isize > 32
+}
+
+/// Open an external URL in the default browser.
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    if shell_open(&url) {
+        Ok(())
+    } else {
+        Err("打开链接失败".into())
     }
 }
 
@@ -212,6 +289,22 @@ fn set_autostart(enabled: bool) -> Result<String, String> {
     }
 }
 
+/// Apply frontend-supplied tray menu labels (so the native menu follows the
+/// selected app language) and rebuild the menu in place.
+#[tauri::command]
+fn apply_tray_labels(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    labels: tray::TrayMenuLabels,
+) -> Result<(), String> {
+    let menu = tray::build_menu(&app, &labels).map_err(|e| e.to_string())?;
+    let guard = lock_or_recover(&state.tray);
+    match guard.as_ref() {
+        Some(tray) => tray.set_menu(Some(menu)).map_err(|e| e.to_string()),
+        None => Err("托盘图标未就绪".into()),
+    }
+}
+
 fn unix_now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -219,60 +312,79 @@ fn unix_now() -> i64 {
         .unwrap_or(0)
 }
 
-/// Helper: read `allow_standby_list_cleanup` from the current config state.
-fn cfg_allow_standby(app: &AppHandle) -> bool {
-    app.state::<AppState>()
-        .config
-        .lock()
-        .unwrap()
-        .allow_standby_list_cleanup
+/// Show the main window (restoring it if minimised) and give it focus.
+pub fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
 }
 
-/// Clean memory triggered from the tray (double-click / menu).
+/// Clean memory triggered from the tray menu.
 pub fn clean_from_tray(app: &AppHandle) {
-    let mask = app.state::<AppState>().config.lock().unwrap().reduct_mask;
-    let allow_standby = cfg_allow_standby(app);
-    let _ = memory::clean_memory(mask, allow_standby, false);
-    let _ = app.emit("memory-update", memory::get_memory_info());
+    let mask = lock_config(&app.state::<AppState>()).reduct_mask;
+    let _ = perform_clean(app, mask, "tray", false);
 }
 
 /// Execute a tray action: 0 = show window, 1 = clean memory.
 pub fn run_tray_action(app: &AppHandle, action: u32) {
     match action {
-        1 => clean_from_tray(app),
-        _ => {
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.unminimize();
-                let _ = w.set_focus();
-            }
-        }
+        config::TRAY_ACTION_CLEAN => clean_from_tray(app),
+        _ => show_main_window(app),
     }
 }
 
 /// (Re)register the global clean hotkey from the current config.
+///
+/// The previous listener is stopped and *joined* before the new one starts, so
+/// two registrations can never overlap (which would make a re-registration of
+/// the same combo fail because the old one was still held).
+///
+/// A failed registration is reported to the frontend: previously the toggle in
+/// the UI kept claiming the hotkey was armed while another application actually
+/// owned the combination, so the feature silently did nothing.
 fn register_hotkey(app: &AppHandle) {
     let state = app.state::<AppState>();
-    let cfg = state.config.lock().unwrap().clone();
+    let cfg = lock_config(&state).clone();
 
-    // Stop any existing hotkey thread.
-    {
-        let mut guard = state.hotkey_stop.lock().unwrap();
-        if let Some(stop) = guard.take() {
-            stop.store(true, Ordering::Relaxed);
-        }
+    stop_hotkey(&state);
+
+    if !cfg.hotkey_clean_enable {
+        return;
     }
 
-    if cfg.hotkey_clean_enable {
-        let (mods, vk) = hotkey::decode(cfg.hotkey_clean);
-        let stop = Arc::new(AtomicBool::new(false));
-        *state.hotkey_stop.lock().unwrap() = Some(stop.clone());
-        let app = app.clone();
-        hotkey::run_hotkey_loop(1, mods, vk, stop, move || {
-            let h = app.clone();
-            let mask = h.state::<AppState>().config.lock().unwrap().reduct_mask;
-            let _ = memory::clean_memory(mask, cfg_allow_standby(&h), false);
-        });
+    let (mods, vk) = hotkey::decode(cfg.hotkey_clean);
+    let stop = Arc::new(AtomicBool::new(false));
+    let app_handle = app.clone();
+    let start = hotkey::start(1, mods, vk, stop.clone(), move || {
+        let app = app_handle.clone();
+        let mask = lock_config(&app.state::<AppState>()).reduct_mask;
+        let _ = perform_clean(&app, mask, "hotkey", false);
+    });
+
+    match start {
+        Ok(join) => {
+            *lock_or_recover(&state.hotkey) = Some(HotkeyHandle {
+                stop,
+                join: Some(join),
+            });
+        }
+        Err(err) => {
+            *lock_or_recover(&state.hotkey) = None;
+            let _ = app.emit("hotkey-error", err.to_string());
+        }
+    }
+}
+
+/// Stop the current hotkey listener (if any) and wait for its thread to exit.
+fn stop_hotkey(state: &AppState) {
+    let handle = lock_or_recover(&state.hotkey).take();
+    if let Some(mut handle) = handle {
+        handle.stop.store(true, Ordering::Relaxed);
+        if let Some(join) = handle.join.take() {
+            let _ = join.join();
+        }
     }
 }
 
@@ -281,6 +393,11 @@ fn register_hotkey(app: &AppHandle) {
 ///
 /// Mirrors the original: threshold-based cleanup is gated by a 30s cooldown,
 /// interval-based cleanup likewise, and both are skipped when disabled.
+///
+/// The threshold and interval are clamped defensively on top of
+/// `Config::sanitize`: a stored `0` would otherwise make the condition
+/// unconditionally true and turn the 1 Hz background loop into a permanent
+/// clean-every-30-seconds loop.
 fn should_autoclean(
     percent: u32,
     enable_by_threshold: bool,
@@ -295,10 +412,10 @@ fn should_autoclean(
     if elapsed < 30 {
         return false;
     }
-    if enable_by_threshold && percent >= threshold {
+    if enable_by_threshold && percent >= threshold.max(1) {
         return true;
     }
-    if enable_by_interval && elapsed >= interval_minutes as i64 * 60 {
+    if enable_by_interval && interval_minutes > 0 && elapsed >= interval_minutes as i64 * 60 {
         return true;
     }
     false
@@ -307,27 +424,26 @@ fn should_autoclean(
 /// Periodic background loop: auto-clean + refresh tray + emit info to UI.
 fn spawn_background(app: AppHandle) {
     std::thread::spawn(move || {
+        // Last rendered tray state; the icon bitmap is only re-rasterised when
+        // something it depends on actually changes.
+        let mut last_tray: Option<(u32, trayicon::TrayIconStyle, String)> = None;
+
         // The original uses a 1000ms timer; we use it for tray + data.
         loop {
             std::thread::sleep(Duration::from_millis(1000));
 
             let state = app.state::<AppState>();
-            let cfg = state.config.lock().unwrap().clone();
+            let cfg = lock_config(&state).clone();
 
-            // Refresh tray every 1s.
+            // One sample per tick, shared by the tray, the UI event and
+            // auto-clean.
+            let info = memory::get_memory_info();
+            let pct = info.physical_memory.percent;
+
+            // Refresh the tray tooltip/bitmap.
             {
-                let state = app.state::<AppState>();
-                let guard = state.tray.lock().unwrap();
+                let guard = lock_or_recover(&state.tray);
                 if let Some(tray) = guard.as_ref() {
-                    let info = memory::get_memory_info();
-                    let pct = info.physical_memory.percent;
-                    let _ = tray.set_title(Some(format!("{pct}%")));
-                    let _ = tray.set_tooltip(Some(format!(
-                        "Mem Reduct\n内存占用: {pct}%\n已用: {:.1} GB / 共: {:.1} GB",
-                        info.physical_memory.used_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
-                        info.physical_memory.total_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
-                    )));
-
                     // Render the percent into the tray icon with the configured
                     // colours (background switches to warning/danger on threshold).
                     let danger = cfg.tray_level_danger;
@@ -360,18 +476,34 @@ fn spawn_background(app: AppHandle) {
                         border: cfg.tray_show_border,
                         round: cfg.tray_round_corners,
                     };
-                    let rgba = trayicon::render(pct, &style);
-                    let icon = tauri::image::Image::new_owned(rgba, 32, 32);
-                    let _ = tray.set_icon(Some(icon));
+                    // Language-neutral tooltip (the tray labels are localised by
+                    // the frontend; the numbers are not).
+                    let tooltip = format!(
+                        "Mem Reduct\n{pct}% · {:.1} GB / {:.1} GB",
+                        info.physical_memory.used_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
+                        info.physical_memory.total_bytes as f64 / 1024.0 / 1024.0 / 1024.0,
+                    );
+
+                    let next = (pct, style, tooltip);
+                    let changed = last_tray.as_ref() != Some(&next);
+                    if changed {
+                        // NOTE: `set_title` is a no-op on Windows (tray-icon
+                        // only implements it on macOS/Linux), so the percent
+                        // reaches the user through the rendered bitmap and the
+                        // tooltip instead of an icon label.
+                        let _ = tray.set_tooltip(Some(next.2.clone()));
+                        let rgba = trayicon::render(pct, &style);
+                        let icon = tauri::image::Image::new_owned(rgba, 32, 32);
+                        let _ = tray.set_icon(Some(icon));
+                        last_tray = Some(next);
+                    }
                 }
             }
 
             // Emit fresh memory info to the frontend.
-            let info = memory::get_memory_info();
             let _ = app.emit("memory-update", info);
 
             // Auto-clean by threshold or interval (with a shared 30s cooldown).
-            let now = unix_now();
             if should_autoclean(
                 info.physical_memory.percent,
                 cfg.autoreduct_enable,
@@ -380,11 +512,9 @@ fn spawn_background(app: AppHandle) {
                 cfg.autoreduct_interval_value,
                 cfg.statistic_last_reduct,
             ) {
-                let guard = app.state::<AppState>();
-                let mut c = guard.config.lock().unwrap();
-                c.statistic_last_reduct = now;
-                drop(c);
-                let _ = memory::clean_memory(cfg.reduct_mask, cfg.allow_standby_list_cleanup, true);
+                // `perform_clean` persists the timestamp, so a restart right
+                // after an auto-clean does not trigger another one immediately.
+                let _ = perform_clean(&app, cfg.reduct_mask, "auto", true);
                 let _ = app.emit("autoclean-done", ());
             }
         }
@@ -393,52 +523,58 @@ fn spawn_background(app: AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Only one interactive instance may run: a second one would register a
+    // second tray icon and start a second 1 Hz background loop competing for
+    // it. The one-shot CLI / elevation-helper modes are handled in `main()`
+    // *before* this point, so they are intentionally exempt from this guard.
+    let takeover = std::env::args().any(|arg| arg == single_instance::TAKEOVER_ARG);
+    let _instance = match single_instance::acquire(takeover) {
+        single_instance::Acquire::Primary(guard) => guard,
+        single_instance::Acquire::Duplicate => {
+            // A duplicate *logon* launch stays silent: the user configured
+            // "start minimized", so popping the window would be wrong. A
+            // duplicate manual launch, on the other hand, should surface the
+            // window the user already has instead of doing nothing at all.
+            if !autostart::is_startup_launch() {
+                single_instance::focus_existing_window();
+            }
+            return;
+        }
+    };
+
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState {
             config: Mutex::new(config::load()),
             tray: Mutex::new(None),
-            hotkey_stop: Mutex::new(None),
+            hotkey: Mutex::new(None),
         })
         .setup(|app| {
             // Create the tray icon and store it in state for background updates.
             if let Ok(tray) = tray::create_tray(app.handle()) {
-                *app.state::<AppState>().tray.lock().unwrap() = Some(tray);
+                *lock_or_recover(&app.state::<AppState>().tray) = Some(tray);
             }
 
             let handle = app.handle().clone();
 
-            // Silent autostart: when launched by the logon task (`-startup`),
-            // start minimized to the tray instead of opening the window.
-            if autostart::is_startup_launch() {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.hide();
+            // Window visibility: the window is created hidden (see
+            // tauri.conf.json) so startup never flickers. It stays hidden when
+            // the user asked for "start minimized to tray" or when we were
+            // launched by the logon task (`-startup`); otherwise it is shown.
+            let start_minimized = lock_config(&app.state::<AppState>()).start_minimized;
+            let silent_launch = autostart::is_startup_launch();
+            if let Some(window) = app.get_webview_window("main") {
+                if start_minimized || silent_launch {
+                    let _ = window.hide();
+                } else {
+                    let _ = window.show();
                 }
             }
 
-            // Handle `-clean` / `-clean:full` command-line action.
-            match cmdline::parse() {
-                cmdline::CommandLineAction::CleanDefault => {
-                    let state = handle.state::<AppState>();
-                    let mask = state.config.lock().unwrap().reduct_mask;
-                    if !elevation::is_elevated() && elevation::relaunch_self_as_admin() {
-                        std::process::exit(0);
-                    }
-                    let _ = memory::clean_memory(mask, cfg_allow_standby(&handle), false);
-                }
-                cmdline::CommandLineAction::CleanFull => {
-                    if !elevation::is_elevated() && elevation::relaunch_self_as_admin() {
-                        std::process::exit(0);
-                    }
-                    let _ =
-                        memory::clean_memory(memory::mask::ALL, cfg_allow_standby(&handle), false);
-                }
-                // `-clean-once` is handled in main() before the UI starts; this
-                // arm is unreachable here.
-                cmdline::CommandLineAction::CleanOnce(_) => {}
-                cmdline::CommandLineAction::None => {}
-            }
+            // NOTE: `-clean`, `-clean:full` and `-clean-once` are handled in
+            // `main()` *before* the UI starts — they clean and exit without ever
+            // creating a window.
 
             // Start the global hotkey (default Ctrl+F1) if enabled.
             register_hotkey(&handle);
@@ -454,6 +590,26 @@ pub fn run() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 let _ = window.hide();
+
+                // Explain it once. Without this the window just disappears and
+                // users reasonably conclude that the app failed to close.
+                let app = window.app_handle();
+                let first_time = {
+                    let state = app.state::<AppState>();
+                    let mut cfg = lock_config(&state);
+                    if cfg.tray_tip_shown {
+                        false
+                    } else {
+                        cfg.tray_tip_shown = true;
+                        let _ = config::save(&cfg);
+                        true
+                    }
+                };
+                if first_time {
+                    // The frontend owns all localisation, so it renders the hint
+                    // (and mirrors it to a system notification).
+                    let _ = app.emit("hidden-to-tray", ());
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -469,6 +625,7 @@ pub fn run() {
             set_autostart,
             get_version,
             open_external,
+            apply_tray_labels,
             updater::check_for_update,
             updater::download_and_install
         ])
@@ -494,5 +651,19 @@ mod tests {
         // Interval mode.
         assert!(should_autoclean(10, false, 90, true, 30, now - 30 * 60));
         assert!(!should_autoclean(10, false, 90, true, 30, now - 60));
+    }
+
+    #[test]
+    fn autoclean_ignores_zeroed_threshold_and_interval() {
+        let now = unix_now();
+        // A stored 0 for either value must not turn the rule into
+        // "clean every 30 seconds" (see `Config::sanitize`).
+        assert!(!should_autoclean(0, true, 0, false, 30, now - 60));
+        assert!(!should_autoclean(0, false, 90, true, 0, now - 60));
+        // The threshold is clamped to 1 rather than dropped, so a threshold of 0
+        // still matches as soon as there is anything at all to reclaim.
+        assert!(should_autoclean(1, true, 0, false, 30, now - 60));
+        // Both disabled is always a no-op.
+        assert!(!should_autoclean(99, false, 90, false, 0, now - 99 * 60));
     }
 }

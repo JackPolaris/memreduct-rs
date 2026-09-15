@@ -21,16 +21,20 @@
 
 ## ✨ 特性
 
-- **8 区域私有内存清理** — 通过未文档化的 `NtSetSystemInformation` (NT API) 清理系统缓存
+- **8 区域私有内存清理** — 通过未文档化的 `NtSetSystemInformation` (NT API) 清理系统缓存；
+  当前系统不支持的区域(注册表缓存需 Win8.1+、合并列表需 Win10+)会在界面上禁用而不是静默跳过
 - **实时内存监控** — 物理内存 / 页面文件 / 系统缓存的用量与百分比
-- **托盘图标** — 显示实时内存百分比,支持圆角/边框/透明与颜色自定义
+- **托盘图标** — 图标内绘制实时内存百分比,支持圆角/边框/透明与颜色自定义,右键菜单跟随应用语言
 - **自动清理** — 按占用率阈值 (默认 90%) 或时间间隔 (默认 30 分钟) 自动清理
-- **全局热键** — 默认 `Ctrl+F1` 一键清理
-- **命令行** — `-clean` / `-clean:full`
-- **多语言** — 简体中文(主)、繁體中文、English、日本語
+- **全局热键** — 默认 `Ctrl+F1` 一键清理;被其他程序占用时会在界面上提示注册失败
+- **单实例保护** — 重复启动只保留一个托盘图标/一个后台循环,第二次启动会唤起已有窗口
+- **命令行** — `-clean` / `-clean:full`(清理后直接退出,不弹界面,未提权时自动请求 UAC);
+  完全失败时返回退出码 1,便于脚本判断
+- **多语言** — 简体中文(主)、繁體中文、English、日本語(界面与托盘菜单同时生效)
 - **主题** — 浅色 / 深色 / 跟随系统 + 7 种主题颜色预设,现代化卡片式界面
-- **开机静默自启** — 计划任务登录时最高权限静默启动到托盘
+- **开机静默自启** — 计划任务登录时最高权限静默启动到托盘(可另设「启动时最小化」)
 - **自动更新** — 启动自动检查更新,一个「检查更新」按钮,发现新版自动下载并静默安装后重启
+  (更新清单地址按编译架构自动选择,支持 x86_64 / aarch64 / i686)
 
 ## 🔧 私有清理 API
 
@@ -64,6 +68,12 @@
 > - **开机静默自启**(可选,设置→常规):计划任务登录时以最高权限静默
 >   启动,直接提权,永不弹 UAC。
 
+> **其他行为说明**:
+> - 关闭窗口 = 最小化到托盘(程序继续运行),首次关闭会弹一次提示;
+>   退出请用托盘菜单的「退出」。
+> - 重复启动不会产生第二个托盘图标,而是直接唤起已经打开的窗口。
+> - 主界面勾选的清理区域会立即保存,托盘菜单、全局热键、自动清理都使用同一份设置。
+
 ## 🚀 从源码构建
 
 环境要求:Windows 10/11、Node.js 22+、Rust stable (MSVC)、VS2022 C++ 桌面负载。
@@ -76,15 +86,38 @@ npm run tauri dev      # 开发运行
 npm run tauri build    # 打包 MSI + NSIS
 ```
 
+> 打包正式版需要 updater 签名私钥(`bundle.createUpdaterArtifacts` 已开启):
+> 设置 `TAURI_SIGNING_PRIVATE_KEY`(minisign 私钥内容或文件路径)即可,
+> 否则 `tauri build` 会因缺少签名密钥而失败。只想验证打包能否通过时,
+> 可用 `npx tauri build --config src-tauri/tauri.ci.conf.json` 关闭 updater 产物
+> (CI 就是这么做的)。
+
 ## 🧪 测试与检查
 
 ```bash
-npx tsc --noEmit                        # 前端类型检查
+npm run build                           # tsc 类型检查 + vite 构建
 cd src-tauri
 cargo fmt --check                       # 格式检查
 cargo clippy --all-targets -- -D warnings  # 静态检查
 cargo test                              # 后端单元测试
 ```
+
+## 🚢 发布新版本
+
+1. 同步版本号:`package.json`、`package-lock.json`、`src-tauri/Cargo.toml`、
+   `src-tauri/tauri.conf.json`,并在 `CHANGELOG.md` 记录变更;
+2. 带签名密钥本地构建(会生成安装包 + updater 清单):
+   ```bash
+   TAURI_SIGNING_PRIVATE_KEY=... npm run tauri build
+   ```
+   产物:`src-tauri/target/release/bundle/nsis/*-setup.exe`、`msi/*.msi`
+   以及 `src-tauri/target/release/bundle/*/latest.json`;
+3. 打 tag(`vX.Y.Z`)并创建 GitHub Release,上传安装包;
+4. 把 Release 中的更新清单重命名为 `update-x86_64-pc-windows-msvc.json` 一并上传
+   — 应用的更新 endpoint 固定指向
+   `releases/latest/download/update-x86_64-pc-windows-msvc.json`;
+5. 仓库根目录的同名文件是最近一次发布清单的副本,便于对照签名/URL 格式,
+   发布后可用新生成的 `latest.json` 覆盖它。
 
 ## 📁 项目结构
 
@@ -94,22 +127,24 @@ mem-reduct-tauri/
 │  ├─ App.tsx              # 主界面 + 设置面板
 │  ├─ api.ts               # Tauri command 封装
 │  ├─ i18n/                # 多语言资源 (zh-CN/zh-TW/en-US/ja-JP)
+│  ├─ accents.ts           # 主题颜色预设
 │  └─ regions.ts           # 清理区域掩码定义
 ├─ src-tauri/              # Rust 后端
 │  ├─ src/
+│  │  ├─ main.rs           # 入口:命令行清理 / 单次提权助手 / 启动 UI
+│  │  ├─ lib.rs            # Tauri 应用装配、后台循环、命令
 │  │  ├─ ntapi.rs          # 私有 NT API 绑定
 │  │  ├─ memory.rs         # 内存采集 + 8 区域清理
-│  │  ├─ config.rs         # portable/appdata 配置存储
+│  │  ├─ config.rs         # portable/appdata 配置存储(原子写入)
 │  │  ├─ tray.rs / trayicon.rs  # 系统托盘 + 动态图标
 │  │  ├─ hotkey.rs         # 全局热键
-│  │  ├─ elevation.rs      # 管理员权限检测
+│  │  ├─ autostart.rs      # 计划任务静默提权自启
+│  │  ├─ elevation.rs      # 管理员权限检测与 runas 重启
 │  │  ├─ updater.rs        # 自动更新
 │  │  └─ cmdline.rs        # 命令行解析
 │  └─ tauri.conf.json
-├─ assets/                 # 应用图标源文件 (SVG)
-├─ scripts/                # 图标生成脚本
-│  ├─ make_icon.py         # 生成 PNG 图标
-│  └─ make_ico.py          # 生成 ICO 图标
+├─ assets/                 # 图标源文件(当前品牌色为蓝色 #3366FF,源为 icon-reference.png)
+├─ scripts/                # 图标生成/校验脚本(见 scripts/README.md,含已废弃链路说明)
 └─ .github/workflows/ci.yml  # CI
 ```
 

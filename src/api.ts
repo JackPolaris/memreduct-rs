@@ -21,14 +21,22 @@ export interface CleanResult {
   freed_bytes: number;
   applied_mask: number;
   regions: string[];
-  elevation_requested: boolean;
+  /**
+   * Region keys whose underlying NT call failed. Empty on a fully successful
+   * cleanup; non-empty usually means the app is not running elevated.
+   */
+  failed: string[];
+}
+
+/** Payload of the `clean-done` event emitted for non-UI cleanup sources. */
+export interface CleanDonePayload {
+  source: "manual" | "tray" | "hotkey" | "auto" | "cmdline";
+  result: CleanResult;
 }
 
 export interface Config {
-  always_on_top: boolean;
   start_minimized: boolean;
   show_reduct_confirmation: boolean;
-  check_updates: boolean;
   theme: string;
   accent_color: string;
   use_dark_theme: boolean;
@@ -48,24 +56,19 @@ export interface Config {
   tray_show_border: boolean;
   tray_round_corners: boolean;
   tray_change_bg: boolean;
-  tray_use_antialiasing: boolean;
   tray_color_text: number;
   tray_color_bg: number;
   tray_color_warning: number;
   tray_color_danger: number;
-  tray_font: string;
 
   tray_action_dc: number;
   tray_action_mc: number;
   tray_level_warning: number;
   tray_level_danger: number;
+  /** Whether the one-off "still running in the tray" hint has been shown. */
+  tray_tip_shown: boolean;
 
-  notifications_sound: boolean;
   balloon_clean_results: boolean;
-  log_clean_results: boolean;
-
-  update_repo: string;
-  update_pubkey: string;
 
   statistic_last_reduct: number;
 }
@@ -83,6 +86,18 @@ export const cleanMemory = (mask: number, source: string) =>
   invoke<CleanResult>("clean_memory", { mask, source });
 export const notify = (title: string, body: string, system = true) =>
   invoke<void>("notify", { title, body, system });
+
+/** Tray menu labels, supplied by the frontend so they follow the app language. */
+export interface TrayLabels {
+  show: string;
+  clean: string;
+  settings: string;
+  website: string;
+  about: string;
+  exit: string;
+}
+export const applyTrayLabels = (labels: TrayLabels) =>
+  invoke<void>("apply_tray_labels", { labels });
 
 // Automatic update via tauri-plugin-updater (source configurable in Settings).
 export interface UpdateInfo {

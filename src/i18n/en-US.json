@@ -7,7 +7,7 @@
   },
   "status": {
     "ok": "Healthy",
-    "warn": "Elevated",
+    "warn": "High",
     "crit": "Critical"
   },
   "note": {
@@ -34,15 +34,20 @@
     "cleanMemory": "Clean Memory",
     "cleaning": "Cleaning…",
     "released": "Freed",
-    "elevationRequested": "Administrator permission requested — allow the UAC prompt to finish cleaning",
     "nothing": "nothing cleaned",
+    "failedCount": "failed",
+    "unsupported": "not supported on this system",
+    "hiddenToTray": "The window was hidden to the tray — Mem Reduct is still running. Right-click the tray icon to clean memory or quit.",
     "configLocation": "Config",
     "portable": "portable",
     "appdata": "appdata",
     "of": "of",
     "notElevated": "No administrator rights - cleaning may be ineffective. Enable silent autostart in Settings→General for permanent elevation",
     "none": "None",
-    "regionsCount": "regions"
+    "regionsCount": "regions",
+    "limited": "Standard rights",
+    "elevated": "Administrator",
+    "elevatedHint": "Running elevated — every cleanup region is available"
   },
   "confirm": {
     "title": "Confirm cleaning these regions?",
@@ -54,8 +59,6 @@
     "memory": "Memory",
     "appearance": "Appearance",
     "tray": "Tray",
-    "advanced": "Advanced",
-    "alwaysOnTop": "Always on top",
     "startMinimized": "Start minimized",
     "autostart": "Autostart",
     "autostartHint": "Start elevated & silent at logon so cleanup needs no UAC (first enable requires one authorization).",
@@ -64,19 +67,14 @@
     "checkUpdates": "Check for updates",
     "checkNow": "Check for updates",
     "checking": "Checking…",
-    "downloading": "Downloading…",
     "installNow": "Download & install",
     "dismiss": "Dismiss",
     "updateInstalling": "New version found, downloading & installing in the background…",
-    "autoCheck": "Check for updates on startup",
-    "updateRepo": "Update source",
-    "updateHint": "Update source is fixed to the official repo. When enabled, updates are checked at startup and can be checked/installed manually.",
     "updateAvailable": "New version available",
     "updateNone": "You're up to date",
     "updateError": "Failed to check/download update",
     "updateTimeout": "Update check timed out — check your network and retry",
     "version": "Version",
-    "darkTheme": "Dark theme",
     "theme": "Theme",
     "theme_light": "Light",
     "theme_dark": "Dark",
@@ -99,13 +97,14 @@
     "middleClickAction": "Middle-click action",
     "warningLevel": "Warning level (%)",
     "dangerLevel": "Danger level (%)",
-    "notificationSound": "Notification sound",
     "showCleanResult": "Show clean result balloon",
-    "logCleanResults": "Log clean results",
     "hotkeyClean": "Global clean hotkey",
-    "hotkeyHint": "Default hotkey: Ctrl+F1 (change in app)",
     "hotkeyCombo": "Hotkey combo",
-    "about": "About"
+    "about": "About",
+    "saveFailed": "Failed to save settings",
+    "hotkeyRecording": "Press a key combination…",
+    "hotkeyFailed": "The hotkey could not be registered (likely taken by another app) — pick a different combination",
+    "hotkeyNeedModifier": "A global hotkey needs a modifier (Ctrl/Alt/Shift/Win), or an F1–F24 key"
   },
   "regions": {
     "workingSet": "Working Set",
@@ -117,14 +116,17 @@
     "registryCache": "Registry Cache",
     "combineMemoryLists": "Combine Memory Lists"
   },
-  "result": {
-    "auto": "Auto",
-    "manual": "Manual",
-    "hotkey": "Hotkey",
-    "cmdline": "Command-line"
-  },
   "about": {
     "website": "Project page",
     "license": "Open source under the GPL-3.0 license."
+  },
+  "accent": {
+    "green": "Green",
+    "purple": "Purple",
+    "blue": "Blue",
+    "orange": "Orange",
+    "red": "Red",
+    "cyan": "Cyan",
+    "pink": "Pink"
   }
 }

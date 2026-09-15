@@ -27,11 +27,13 @@ where
     while i < args.len() {
         let lower = args[i].to_lowercase();
         if lower == "-clean-once" || lower == "/clean-once" || lower == "--clean-once" {
-            // Optional mask follows this argument.
+            // Optional mask follows this argument. Unknown bits are dropped so a
+            // hand-typed value can never reach the NT calls with stray flags.
             let mask = args
                 .get(i + 1)
                 .and_then(|v| v.parse::<u32>().ok())
-                .unwrap_or(crate::memory::mask::ALL);
+                .unwrap_or(crate::memory::mask::ALL)
+                & crate::memory::mask::ALL;
             return CommandLineAction::CleanOnce(mask);
         }
         if lower == "-clean" || lower == "/clean" || lower == "--clean" {

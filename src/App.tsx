@@ -1,24 +1,36 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import i18n from "./i18n";
 import {
+  applyTrayLabels,
   checkForUpdate,
   cleanMemory,
   downloadAndInstall,
   getAutostart,
   getConfig,
+  getConfigLocation,
   getMemoryInfo,
+  getOsInfo,
   getVersion,
+  isElevated,
   notify,
   openExternal,
   saveConfig,
   setAutostart,
+  type CleanDonePayload,
   type Config,
   type MemoryInfo,
 } from "./api";
-import { MASK_ALL, MASK_DEFAULT, REGIONS } from "./regions";
-import { SUPPORTED_LANGUAGES } from "./i18n";
+import {
+  MASK_ALL,
+  MASK_DEFAULT,
+  REGIONS,
+  isRegionSupported,
+  supportedMask,
+  type OsCapabilities,
+} from "./regions";
+import { SUPPORTED_LANGUAGES, normalizeLanguage } from "./i18n";
 import { ACCENTS, accentByKey } from "./accents";
 import {
   IconBell,
@@ -68,10 +80,36 @@ function formatBytes(n: number): string {
   return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-function colorForPercent(p: number): string {
-  if (p >= 90) return "#ef4444";
-  if (p >= 70) return "#f59e0b";
-  return "#0b9d5e";
+/** Colour of the gauge ring / pressure chip, using the user's own thresholds. */
+function pressureColor(percent: number, warnLevel: number, dangerLevel: number): string {
+  if (percent >= dangerLevel) return "var(--danger)";
+  if (percent >= warnLevel) return "var(--warning)";
+  return "var(--accent)";
+}
+
+/** Default thresholds, matching `Config::default()` on the Rust side. */
+const DEFAULT_WARN_LEVEL = 70;
+const DEFAULT_DANGER_LEVEL = 90;
+
+/**
+ * One-line summary of a cleanup result, shared by the manual path and the
+ * `clean-done` events so both report identically.
+ *
+ * Failed regions are called out explicitly: reporting only "freed 0 B" made a
+ * refused cleanup look like a successful no-op.
+ */
+function cleanResultBody(
+  result: { freed_bytes: number; regions: string[]; failed: string[] },
+  t: (key: string) => string
+): string {
+  const parts = [`${t("main.released")} ${formatBytes(result.freed_bytes)}`];
+  if (result.regions.length > 0) {
+    parts.push(`${result.regions.length} ${t("main.regionsCount")}`);
+  }
+  if (result.failed.length > 0) {
+    parts.push(`${result.failed.length} ${t("main.failedCount")}`);
+  }
+  return parts.join(" · ");
 }
 
 export default function App() {
@@ -80,13 +118,32 @@ export default function App() {
   const [settingsSection, setSettingsSection] = useState<Section>("general");
   const [info, setInfo] = useState<MemoryInfo | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
+  const [osInfo, setOsInfo] = useState<OsCapabilities | null>(null);
   const [selectedMask, setSelectedMask] = useState<number>(MASK_DEFAULT);
   const [cleaning, setCleaning] = useState(false);
   const [confirmMask, setConfirmMask] = useState<number | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [toastSeq, setToastSeq] = useState(0);
-  const [version, setVersion] = useState<string>("3.5.3");
+  const [version, setVersion] = useState<string>("");
+  const [elevated, setElevated] = useState<boolean | null>(null);
+  const [configLocation, setConfigLocation] = useState<string>("");
   const progressToastId = useRef<number | null>(null);
+  /** Monotonic id source: `Date.now()` alone collides when two toasts are
+   *  pushed within the same millisecond. */
+  const toastIdSeq = useRef(0);
+  /** Auto-dismiss timers, cleared on unmount so they can't fire late. */
+  const toastTimers = useRef<number[]>([]);
+  /**
+   * The region mask the user last picked.
+   *
+   * Kept in a ref (not only in state) so a settings save that was already
+   * debounced cannot round-trip an older `reduct_mask` and silently undo the
+   * main screen's selection.
+   */
+  const maskRef = useRef<number>(MASK_DEFAULT);
+  /** Live translation function for imperative callbacks created on mount. */
+  const tRef = useRef<(key: string) => string>(() => "");
+  /** Live `balloon_clean_results`, for the same mount-time listeners. */
+  const balloonCleanResultsRef = useRef<boolean>(true);
 
   // Theme: "light" | "dark" | "system" (the legacy use_dark_theme flag is
   // honoured only for configs saved before the three-state theme existed).
@@ -115,13 +172,32 @@ export default function App() {
     document.body.classList.toggle("dark", dark);
   }, [config?.theme, config?.use_dark_theme, systemDark]);
 
-  // Apply the accent color preset to CSS variables (--accent / --accent2).
+  // Apply the accent color preset. Only the base colour is injected; every
+  // derived tone is computed from it in styles.css.
   useEffect(() => {
     const accent = accentByKey(config?.accent_color ?? "green");
-    const root = document.documentElement;
-    root.style.setProperty("--accent", accent.primary);
-    root.style.setProperty("--accent2", accent.secondary);
+    document.documentElement.style.setProperty("--accent-base", accent.primary);
   }, [config?.accent_color]);
+
+  // Keep the native tray menu labels in sync with the app language.
+  const pushTrayLabels = useCallback(() => {
+    applyTrayLabels({
+      show: i18n.t("tray.show"),
+      clean: i18n.t("tray.clean"),
+      settings: i18n.t("tray.settings"),
+      website: i18n.t("tray.website"),
+      about: i18n.t("tray.about"),
+      exit: i18n.t("tray.exit"),
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    pushTrayLabels();
+    i18n.on("languageChanged", pushTrayLabels);
+    return () => {
+      i18n.off("languageChanged", pushTrayLabels);
+    };
+  }, [pushTrayLabels]);
 
   // Single update-prompt toast id — pushing an update prompt again replaces it.
   const dismissToast = (id: number) => {
@@ -135,7 +211,8 @@ export default function App() {
     kind: ToastKind = "info",
     opts?: { progress?: number; progressTotal?: number; action?: () => void; stickyId?: number }
   ) => {
-    const id = opts?.stickyId ?? Date.now() + toastSeq;
+    toastIdSeq.current += 1;
+    const id = opts?.stickyId ?? toastIdSeq.current;
     if (opts?.stickyId !== undefined) {
       // Upsert: if a toast with this sticky id exists, update it in place;
       // otherwise create it. (A pure "update existing" silently drops the first
@@ -152,12 +229,13 @@ export default function App() {
       });
       return id;
     }
-    setToastSeq((s) => s + 1);
     setToasts((ts) => [...ts, { id, title, body, kind, progress: opts?.progress, progressTotal: opts?.progressTotal, action: opts?.action }]);
     if (kind !== "update" && kind !== "progress") {
-      setTimeout(() => {
+      const timer = window.setTimeout(() => {
+        toastTimers.current = toastTimers.current.filter((t) => t !== timer);
         setToasts((ts) => ts.filter((t) => t.id !== id));
       }, 4200);
+      toastTimers.current.push(timer);
     }
     return id;
   };
@@ -168,7 +246,10 @@ export default function App() {
     setToasts((ts) => ts.filter((t) => t.kind !== "update"));
     const stickyId = Date.now() + 1000000; // stable id for the progress toast
     progressToastId.current = stickyId;
-    pushToast(t("settings.updateInstalling"), "0%", "progress", {
+    // `i18n.t` rather than the hook's `t`: this function is captured by the
+    // mount-time update prompt, so a bound `t` would freeze the language at
+    // startup.
+    pushToast(i18n.t("settings.updateInstalling"), "0%", "progress", {
       stickyId,
       progress: 0,
       progressTotal: 100,
@@ -179,25 +260,38 @@ export default function App() {
     } catch (e) {
       progressToastId.current = null;
       dismissToast(stickyId);
-      pushToast(t("settings.updateError"), String(e), "info");
+      pushToast(i18n.t("settings.updateError"), String(e), "info");
     }
   };
 
   useEffect(() => {
-    getMemoryInfo().then(setInfo);
+    tRef.current = t;
+  }, [t]);
+
+  useEffect(() => {
+    balloonCleanResultsRef.current = config?.balloon_clean_results ?? true;
+  }, [config?.balloon_clean_results]);
+
+  useEffect(() => {
+    getMemoryInfo().then(setInfo).catch(() => {});
     getVersion().then(setVersion).catch(() => {});
+    isElevated().then(setElevated).catch(() => {});
+    getConfigLocation().then(setConfigLocation).catch(() => {});
+    // OS capabilities gate the regions this machine can actually clean.
+    getOsInfo().then(setOsInfo).catch(() => {});
     getConfig().then((c) => {
       setConfig(c);
+      maskRef.current = c.reduct_mask;
       setSelectedMask(c.reduct_mask);
-      if (c.language && c.language !== i18n.language) {
-        i18n.changeLanguage(c.language);
-      }
+      // Apply the persisted language before any translated text is built.
+      const lang = normalizeLanguage(c.language);
+      if (lang) i18n.changeLanguage(lang);
       // Startup update check (always on): if a new version exists, show an
       // interactive pill with an "install" button (deduped to one pill).
       checkForUpdate()
         .then((r) => {
           if (r.available) {
-            pushToast(t("settings.updateAvailable"), `v${r.version}`, "update", {
+            pushToast(i18n.t("settings.updateAvailable"), `v${r.version}`, "update", {
               stickyId: UPDATE_PROMPT_ID,
               action: () => startUpdateInstall(),
             });
@@ -219,8 +313,30 @@ export default function App() {
       setTab("settings");
       setSettingsSection("about");
     });
-    const unlistenToast = listen<{ title: string; body: string }>("app-toast", (e) => {
-      pushToast(e.payload.title, e.payload.body, "info");
+    // Cleanups started from the tray / hotkey / auto rule have no command caller
+    // to report back to, so the backend announces them here.
+    const unlistenClean = listen<CleanDonePayload>("clean-done", (e) => {
+      const { source, result } = e.payload;
+      if (source === "manual") return; // already reported by runClean
+      if (!balloonCleanResultsRef.current) return;
+      const body = cleanResultBody(result, tRef.current);
+      pushToast(tRef.current("main.cleanMemory"), body, "success");
+      notify(tRef.current("app.name"), body).catch(() => {});
+    });
+    // A hotkey that could not be registered used to fail silently while the
+    // toggle kept claiming it was armed.
+    const unlistenHotkey = listen<string>("hotkey-error", (e) => {
+      pushToast(tRef.current("settings.hotkeyClean"), tRef.current("settings.hotkeyFailed"), "info");
+      notify(tRef.current("settings.hotkeyClean"), tRef.current("settings.hotkeyFailed"), true).catch(
+        () => {}
+      );
+      console.warn("hotkey registration failed:", e.payload);
+    });
+    // Closing the window only hides it; say so the first time.
+    const unlistenHidden = listen("hidden-to-tray", () => {
+      const body = tRef.current("main.hiddenToTray");
+      pushToast(tRef.current("app.name"), body, "info");
+      notify(tRef.current("app.name"), body, true).catch(() => {});
     });
     const unlistenProgress = listen<{ chunk: number; total: number | null }>(
       "update-progress",
@@ -239,18 +355,19 @@ export default function App() {
       }
     );
 
-    const poll = setInterval(() => {
-      getMemoryInfo().then(setInfo).catch(() => {});
-    }, 1000);
+    // No polling: the Rust backend emits "memory-update" once per second.
 
     return () => {
-      clearInterval(poll);
       unlistenMemory.then((fn) => fn());
       unlistenAuto.then((fn) => fn());
       unlistenSettings.then((fn) => fn());
       unlistenAbout.then((fn) => fn());
-      unlistenToast.then((fn) => fn());
+      unlistenClean.then((fn) => fn());
+      unlistenHotkey.then((fn) => fn());
+      unlistenHidden.then((fn) => fn());
       unlistenProgress.then((fn) => fn());
+      toastTimers.current.forEach((timer) => window.clearTimeout(timer));
+      toastTimers.current = [];
     };
   }, []);
 
@@ -261,22 +378,15 @@ export default function App() {
       const res = await cleanMemory(mask, "manual");
       getMemoryInfo().then(setInfo).catch(() => {});
       // In-app toast + system notification.
-      const body = res.elevation_requested
-        ? t("main.elevationRequested")
-        : `${t("main.released")} ${formatBytes(res.freed_bytes)}${
-            res.regions.length > 0
-              ? ` · ${res.regions.length} ${t("main.regionsCount")}`
-              : ""
-          }`;
+      const body = cleanResultBody(res, t);
       if (config?.balloon_clean_results ?? true) {
-        pushToast(
-          t("main.cleanMemory"),
-          body,
-          res.elevation_requested ? "info" : "success"
-        );
-        notify(t("app.name"), body, config?.notifications_sound ?? true).catch(() => {});
+        // A partially refused cleanup is not a success — say so with a neutral
+        // style rather than a green check.
+        pushToast(t("main.cleanMemory"), body, res.failed.length > 0 ? "info" : "success");
+        notify(t("app.name"), body).catch(() => {});
       }
     } catch (e) {
+      pushToast(t("main.cleanMemory"), String(e), "info");
       console.error("clean failed", e);
     } finally {
       setCleaning(false);
@@ -285,6 +395,10 @@ export default function App() {
 
   const handleClean = () => {
     if (cleaning) return;
+    if (selectedMask === 0) {
+      pushToast(t("main.cleanMemory"), t("main.nothing"), "info");
+      return;
+    }
     if (config?.show_reduct_confirmation) {
       setConfirmMask(selectedMask);
     } else {
@@ -292,21 +406,63 @@ export default function App() {
     }
   };
 
-  const saveConfigAndReload = async (next: Config) => {
+  /**
+   * Apply a region mask to the UI and (optionally) persist it.
+   *
+   * Persisting matters: the tray menu, the global hotkey and the automatic rule
+   * all clean `reduct_mask` from the config, so a selection that only lived in
+   * React state made those entry points disagree with what the user had ticked —
+   * and lost the choice on every restart.
+   */
+  const applyMask = (mask: number, persist: boolean) => {
+    const effective = supportedMask(mask, osInfo);
+    maskRef.current = effective;
+    setSelectedMask(effective);
+    if (!persist || !config) return;
+    const next: Config = { ...config, reduct_mask: effective };
     setConfig(next);
-    setSelectedMask(next.reduct_mask);
-    await saveConfig(next);
+    saveConfig(next).catch((e) => pushToast(i18n.t("settings.saveFailed"), String(e), "info"));
+  };
+
+  const saveConfigAndReload = async (next: Config) => {
+    // The settings panel never edits the region mask, so always carry the
+    // freshest one over instead of round-tripping whatever the draft holds.
+    const merged: Config = { ...next, reduct_mask: maskRef.current };
+    setConfig(merged);
+    setSelectedMask(maskRef.current);
+    try {
+      await saveConfig(merged);
+    } catch (e) {
+      pushToast(i18n.t("settings.saveFailed"), String(e), "info");
+    }
   };
 
   const toggleRegion = (bit: number) => {
-    setSelectedMask((m) => (m & bit ? m & ~bit : m | bit));
+    applyMask(selectedMask & bit ? selectedMask & ~bit : selectedMask | bit, true);
   };
+
+  // Escape closes the confirmation dialog (the overlay click alone is not
+  // discoverable, and there is no other keyboard route out of it).
+  useEffect(() => {
+    if (confirmMask === null) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirmMask(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [confirmMask]);
 
   const phys = info?.physical_memory;
   const physPct = phys?.percent ?? 0;
-  const pressure = physPct >= 90 ? "crit" : physPct >= 70 ? "warn" : "ok";
-  const selectedCount = REGIONS.filter((r) => selectedMask & r.bit).length;
-
+  // Follow the user's own tray thresholds instead of a hardcoded 70/90 pair, so
+  // the main screen and the tray icon agree on what "high" means.
+  const warnLevel = config?.tray_level_warning ?? DEFAULT_WARN_LEVEL;
+  const dangerLevel = config?.tray_level_danger ?? DEFAULT_DANGER_LEVEL;
+  const pressure = physPct >= dangerLevel ? "crit" : physPct >= warnLevel ? "warn" : "ok";
+  const selectedCount = REGIONS.filter(
+    (r) => selectedMask & r.bit && isRegionSupported(r, osInfo)
+  ).length;
+  const supportedCount = REGIONS.filter((r) => isRegionSupported(r, osInfo)).length;
   return (
     <div className={`app ${resolvedDark ? "dark" : ""}`}>
       <header className="topbar">
@@ -342,6 +498,15 @@ export default function App() {
                 <span className="dot" />
                 {t(`status.${pressure}`)}
               </span>
+              {elevated !== null && (
+                <span
+                  className={`statuschip ${elevated ? "elevated" : "plain"}`}
+                  title={elevated ? t("main.elevatedHint") : t("main.notElevated")}
+                >
+                  <span className="dot" />
+                  {elevated ? t("main.elevated") : t("main.limited")}
+                </span>
+              )}
             </div>
 
             <section className="hero glass">
@@ -349,7 +514,7 @@ export default function App() {
                 <div
                   className="gauge"
                   style={{
-                    background: `conic-gradient(${colorForPercent(physPct)} ${physPct}%, var(--ring-bg) ${physPct}% 100%)`,
+                    background: `conic-gradient(${pressureColor(physPct, warnLevel, dangerLevel)} ${physPct}%, var(--ring-bg) ${physPct}% 100%)`,
                   }}
                 >
                   <div className="gauge-inner">
@@ -368,18 +533,24 @@ export default function App() {
                   title={t("main.physical")}
                   obj={info?.physical_memory}
                   t={t}
+                  warnLevel={warnLevel}
+                  dangerLevel={dangerLevel}
                 />
                 <MetricCard
                   icon={<IconDrive size={17} />}
                   title={t("main.pageFile")}
                   obj={info?.page_file}
                   t={t}
+                  warnLevel={warnLevel}
+                  dangerLevel={dangerLevel}
                 />
                 <MetricCard
                   icon={<IconCache size={17} />}
                   title={t("main.systemCache")}
                   obj={info?.system_cache}
                   t={t}
+                  warnLevel={warnLevel}
+                  dangerLevel={dangerLevel}
                 />
               </div>
             </section>
@@ -390,27 +561,40 @@ export default function App() {
                   <IconSparkles size={15} />
                   {t("main.cleanRegions")}
                 </div>
-                <span className="panel-count">{selectedCount}/8</span>
+                <span className="panel-count">
+                  {selectedCount}/{supportedCount}
+                </span>
               </div>
               <div className="region-grid">
-                {REGIONS.map((r) => (
-                  <RegionCard
-                    key={r.key}
-                    label={t(`regions.${r.key}`)}
-                    note={r.noteKey ? t(r.noteKey) : ""}
-                    on={Boolean(selectedMask & r.bit)}
-                    onClick={() => toggleRegion(r.bit)}
-                  />
-                ))}
+                {REGIONS.map((r) => {
+                  const supported = isRegionSupported(r, osInfo);
+                  return (
+                    <RegionCard
+                      key={r.key}
+                      label={t(`regions.${r.key}`)}
+                      note={
+                        supported
+                          ? r.noteKey
+                            ? t(r.noteKey)
+                            : ""
+                          : t("main.unsupported")
+                      }
+                      noteIsWarning={supported}
+                      on={Boolean(selectedMask & r.bit)}
+                      disabled={!supported}
+                      onClick={() => toggleRegion(r.bit)}
+                    />
+                  );
+                })}
               </div>
               <div className="region-actions">
-                <button className="chipbtn" onClick={() => setSelectedMask(MASK_ALL)}>
+                <button className="chipbtn" onClick={() => applyMask(MASK_ALL, true)}>
                   {t("main.all")}
                 </button>
-                <button className="chipbtn" onClick={() => setSelectedMask(MASK_DEFAULT)}>
+                <button className="chipbtn" onClick={() => applyMask(MASK_DEFAULT, true)}>
                   {t("main.default")}
                 </button>
-                <button className="chipbtn" onClick={() => setSelectedMask(0)}>
+                <button className="chipbtn" onClick={() => applyMask(0, true)}>
                   {t("main.none")}
                 </button>
               </div>
@@ -424,14 +608,20 @@ export default function App() {
         </div>
         <div style={{ display: tab === "settings" ? "flex" : "none", flex: 1, minHeight: 0 }}>
           {config ? (
-            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} section={settingsSection} onSectionChange={setSettingsSection} onToast={pushToast} onUpdate={(v) => { pushToast(t("settings.updateAvailable"), `v${v}`, "update", { stickyId: UPDATE_PROMPT_ID, action: () => startUpdateInstall() }); }} />
+            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} configLocation={configLocation} section={settingsSection} onSectionChange={setSettingsSection} onToast={pushToast} onUpdate={(v) => { pushToast(t("settings.updateAvailable"), `v${v}`, "update", { stickyId: UPDATE_PROMPT_ID, action: () => startUpdateInstall() }); }} />
           ) : null}
         </div>
       </main>
 
       {confirmMask !== null && (
         <div className="modal-overlay" onClick={() => setConfirmMask(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("confirm.title")}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-title">
               <IconSparkles size={17} />
               {t("confirm.title")}
@@ -506,47 +696,73 @@ function MetricCard({
   title,
   obj,
   t,
+  warnLevel,
+  dangerLevel,
 }: {
   icon: React.ReactNode;
   title: string;
   obj?: { total_bytes: number; free_bytes: number; used_bytes: number; percent: number };
   t: (k: string) => string;
+  warnLevel: number;
+  dangerLevel: number;
 }) {
-  if (!obj) return null;
+  // Render placeholders instead of nothing until the first sample arrives, so
+  // the card layout never pops in after the fact.
+  const pct = obj?.percent ?? 0;
   const barClass =
-    obj.percent >= 90 ? "bar-fill danger" : obj.percent >= 70 ? "bar-fill warn" : "bar-fill";
+    pct >= dangerLevel ? "bar-fill danger" : pct >= warnLevel ? "bar-fill warn" : "bar-fill";
   return (
     <div className="metric">
       <div className="metric-icon">{icon}</div>
       <div className="metric-body">
         <div className="metric-top">
           <span className="metric-title">{title}</span>
-          <span className="metric-value">{formatBytes(obj.used_bytes)}</span>
+          <span className="metric-value">{obj ? formatBytes(obj.used_bytes) : "—"}</span>
         </div>
         <div className="metric-sub">
-          {t("main.of")} {formatBytes(obj.total_bytes)} · {obj.percent}%
+          {t("main.of")} {obj ? formatBytes(obj.total_bytes) : "—"} · {pct}%
         </div>
         <div className="bar">
-          <div className={barClass} style={{ width: `${obj.percent}%` }} />
+          <div className={barClass} style={{ width: `${pct}%` }} />
         </div>
       </div>
     </div>
   );
 }
 
+/**
+ * A single clean-region toggle.
+ *
+ * Rendered as a real `role="checkbox"` button rather than a clickable `<label>`:
+ * the previous markup was unreachable by keyboard and invisible to screen
+ * readers, so the region selection could not be used without a mouse.
+ */
 function RegionCard({
   label,
   note,
+  noteIsWarning,
   on,
+  disabled,
   onClick,
 }: {
   label: string;
   note: string;
+  noteIsWarning: boolean;
   on: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   return (
-    <label className={`region ${on ? "on" : ""}`} onClick={onClick}>
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={on}
+      aria-disabled={disabled}
+      disabled={disabled}
+      className={`region ${on ? "on" : ""} ${disabled ? "unsupported" : ""}`}
+      onClick={disabled ? undefined : onClick}
+      title={disabled ? note : undefined}
+    >
       <span className="check">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20 6L9 17l-5-5" />
@@ -554,9 +770,11 @@ function RegionCard({
       </span>
       <span className="region-body">
         <span>{label}</span>
-        {note && <span className="region-note">{note}</span>}
+        {note && (
+          <span className={noteIsWarning ? "region-note" : "region-note muted"}>{note}</span>
+        )}
       </span>
-    </label>
+    </button>
   );
 }
 
@@ -567,6 +785,7 @@ function SettingsPanel({
   t,
   onSave,
   version,
+  configLocation,
   section,
   onSectionChange,
   onToast,
@@ -576,6 +795,7 @@ function SettingsPanel({
   t: (k: string) => string;
   onSave: (c: Config) => void;
   version: string;
+  configLocation: string;
   section: Section;
   onSectionChange: (s: Section) => void;
   onToast: (title: string, body: string, kind?: "info" | "success") => void;
@@ -583,7 +803,32 @@ function SettingsPanel({
 }) {
   const [draft, setDraft] = useState<Config>(config);
   const [autostart, setAutostartState] = useState<boolean>(false);
-  const [updatePhase, setUpdatePhase] = useState<"idle" | "checking" | "downloading">("idle");
+  const [updatePhase, setUpdatePhase] = useState<"idle" | "checking">("idle");
+  /** Debounced persistence: sliders fire `set()` on every pixel of movement,
+   *  and each save writes the config file and re-arms the global hotkey. */
+  const saveTimer = useRef<number | null>(null);
+  const pendingSave = useRef<Config | null>(null);
+  // `onSave` is re-created by the parent on every render, so keep it in a ref:
+  // depending on it directly would defeat the debounce below.
+  const onSaveRef = useRef(onSave);
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
+
+  const flushSave = useCallback(() => {
+    if (saveTimer.current !== null) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const next = pendingSave.current;
+    if (next) {
+      pendingSave.current = null;
+      onSaveRef.current(next);
+    }
+  }, []);
+
+  // Persist whatever is still pending when leaving the settings view.
+  useEffect(() => flushSave, [flushSave]);
 
   useEffect(() => {
     setDraft(config);
@@ -635,10 +880,20 @@ function SettingsPanel({
       });
   };
 
+  // Update local state immediately, persist (debounced) shortly after.
   const set = <K extends keyof Config>(k: K, v: Config[K]) => {
     setDraft((d) => {
       const next = { ...d, [k]: v };
-      onSave(next);
+      pendingSave.current = next;
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+      saveTimer.current = window.setTimeout(() => {
+        saveTimer.current = null;
+        const pending = pendingSave.current;
+        if (pending) {
+          pendingSave.current = null;
+          onSaveRef.current(pending);
+        }
+      }, 300);
       return next;
     });
   };
@@ -704,6 +959,7 @@ function SettingsPanel({
               <Toggle label={t("settings.autostart")} icon={<IconBolt size={15} />} checked={autostart} onChange={toggleAutostart} />
               <div className="hint">{t("settings.autostartHint")}</div>
               <Toggle label={t("settings.showCleanConfirmation")} icon={<IconSparkles size={15} />} checked={draft.show_reduct_confirmation} onChange={(v) => set("show_reduct_confirmation", v)} />
+              <Toggle label={t("settings.startMinimized")} icon={<IconTray size={15} />} checked={draft.start_minimized} onChange={(v) => set("start_minimized", v)} />
               <Toggle label={t("settings.hotkeyClean")} icon={<IconKeyboard size={15} />} checked={draft.hotkey_clean_enable} onChange={(v) => set("hotkey_clean_enable", v)} />
               {draft.hotkey_clean_enable && (
                 <div className="setrow">
@@ -719,8 +975,9 @@ function SettingsPanel({
                 <select
                   value={draft.language}
                   onChange={(e) => {
-                    set("language", e.target.value);
-                    i18n.changeLanguage(e.target.value);
+                    const lang = normalizeLanguage(e.target.value) ?? "zh-CN";
+                    set("language", lang);
+                    i18n.changeLanguage(lang);
                   }}
                 >
                   {SUPPORTED_LANGUAGES.map((l) => (
@@ -775,10 +1032,10 @@ function SettingsPanel({
                       key={a.key}
                       className={`swatch ${draft.accent_color === a.key ? "active" : ""}`}
                       style={{ background: a.primary }}
-                      title={a.name}
+                      title={t(a.nameKey)}
                       onClick={() => set("accent_color", a.key)}
                       type="button"
-                      aria-label={a.name}
+                      aria-label={t(a.nameKey)}
                     />
                   ))}
                 </div>
@@ -800,7 +1057,6 @@ function SettingsPanel({
               <Select label={t("settings.middleClickAction")} value={draft.tray_action_mc} onChange={(v) => set("tray_action_mc", v)} options={[[0, t("tray.show")], [1, t("tray.clean")]]} />
               <Slider label={t("settings.warningLevel")} value={draft.tray_level_warning} min={0} max={100} onChange={(v) => set("tray_level_warning", v)} />
               <Slider label={t("settings.dangerLevel")} value={draft.tray_level_danger} min={0} max={100} onChange={(v) => set("tray_level_danger", v)} />
-              <Toggle label={t("settings.notificationSound")} icon={<IconBell size={15} />} checked={draft.notifications_sound} onChange={(v) => set("notifications_sound", v)} />
               <Toggle label={t("settings.showCleanResult")} icon={<IconSparkles size={15} />} checked={draft.balloon_clean_results} onChange={(v) => set("balloon_clean_results", v)} />
             </>
           )}
@@ -820,14 +1076,25 @@ function SettingsPanel({
                   {updatePhase === "checking" && <span className="spinner" />}
                   {updatePhase === "checking"
                     ? t("settings.checking")
-                    : updatePhase === "downloading"
-                      ? t("settings.downloading")
-                      : t("settings.checkNow")}
+                    : t("settings.checkNow")}
                 </button>
               </div>
               <div className="setrow">
                 <span className="setrow-label">{t("settings.version")}</span>
-                <span className="setrow-value">v{version}</span>
+                <span className="setrow-value">{version ? `v${version}` : "…"}</span>
+              </div>
+              <div className="setrow">
+                <span className="setrow-label">
+                  <span className="icon"><IconSettings size={15} /></span>
+                  {t("main.configLocation")}
+                </span>
+                <span className="setrow-value">
+                  {configLocation === "portable"
+                    ? t("main.portable")
+                    : configLocation === "appdata"
+                      ? t("main.appdata")
+                      : "…"}
+                </span>
               </div>
               <div className="setrow">
                 <span className="setrow-label">
@@ -986,9 +1253,10 @@ function hotkeyLabel(value: number): string {
   if (mods & MOD_SHIFT) parts.push("Shift");
   if (mods & MOD_WIN) parts.push("Win");
   // Virtual-key → readable name for common keys.
-  if (vk >= 112 && vk <= 123) parts.push(`F${vk - 111}`);
+  if (vk >= 112 && vk <= 135) parts.push(`F${vk - 111}`);
   else if (vk >= 65 && vk <= 90) parts.push(String.fromCharCode(vk));
   else if (vk >= 48 && vk <= 57) parts.push(String.fromCharCode(vk));
+  else if (vk >= 96 && vk <= 105) parts.push(`Num${vk - 96}`);
   else if (vk === 32) parts.push("Space");
   else if (vk === 13) parts.push("Enter");
   else if (vk === 9) parts.push("Tab");
@@ -1003,6 +1271,56 @@ function hotkeyLabel(value: number): string {
   return parts.join(" + ");
 }
 
+/**
+ * Translate a keyboard event into a Windows virtual-key code.
+ *
+ * Uses `KeyboardEvent.code` (layout independent) instead of the deprecated
+ * `keyCode`. Returns `null` for keys that cannot be part of a hotkey (pure
+ * modifiers, media keys, …).
+ */
+function toVirtualKey(e: KeyboardEvent): number | null {
+  const code = e.code ?? "";
+  if (/^Key[A-Z]$/.test(code)) return code.charCodeAt(3);
+  if (/^Digit[0-9]$/.test(code)) return code.charCodeAt(5);
+  if (/^Numpad[0-9]$/.test(code)) return 96 + Number(code.slice(6));
+  if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) return 112 + Number(code.slice(1)) - 1;
+  const special: Record<string, number> = {
+    Space: 32,
+    Enter: 13,
+    NumpadEnter: 13,
+    Tab: 9,
+    Escape: 27,
+    Backspace: 8,
+    Delete: 46,
+    Insert: 45,
+    Home: 36,
+    End: 35,
+    PageUp: 33,
+    PageDown: 34,
+    ArrowLeft: 37,
+    ArrowUp: 38,
+    ArrowRight: 39,
+    ArrowDown: 40,
+    Minus: 189,
+    Equal: 187,
+    BracketLeft: 219,
+    BracketRight: 221,
+    Backslash: 220,
+    Semicolon: 186,
+    Quote: 222,
+    Comma: 188,
+    Period: 190,
+    Slash: 191,
+    Backquote: 192,
+  };
+  return special[code] ?? null;
+}
+
+/** Function keys work standalone; every other key needs a modifier. */
+function isFunctionKey(vk: number): boolean {
+  return vk >= 112 && vk <= 135;
+}
+
 function HotkeyRecorder({
   value,
   onChange,
@@ -1010,39 +1328,57 @@ function HotkeyRecorder({
   value: number;
   onChange: (v: number) => void;
 }) {
+  const { t } = useTranslation();
   const [recording, setRecording] = useState(false);
+  const [invalid, setInvalid] = useState(false);
 
-  const start = () => setRecording(true);
+  const start = () => {
+    setInvalid(false);
+    setRecording(true);
+  };
 
   useEffect(() => {
     if (!recording) return;
     const handler = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      if (e.key === "Escape") {
+        setRecording(false);
+        return;
+      }
+      const vk = toVirtualKey(e);
+      // Ignore pure modifier presses while recording.
+      if (vk === null) return;
       let mods = 0;
       if (e.ctrlKey) mods |= MOD_CTRL;
       if (e.altKey) mods |= MOD_ALT;
       if (e.shiftKey) mods |= MOD_SHIFT;
       if (e.metaKey) mods |= MOD_WIN;
-      const vk = e.keyCode || 0;
-      // Only record real keys (ignore pure modifier presses).
-      if (vk && vk !== 16 && vk !== 17 && vk !== 18 && vk !== 91 && vk !== 92) {
-        onChange(((mods & 0xffff) << 16) | (vk & 0xffff));
+      // A bare letter/digit would swallow that key globally — require a
+      // modifier unless the key is a function key.
+      if (mods === 0 && !isFunctionKey(vk)) {
+        setInvalid(true);
+        return;
       }
+      onChange(((mods & 0xffff) << 16) | (vk & 0xffff));
       setRecording(false);
+      setInvalid(false);
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
   }, [recording, onChange]);
 
   return (
-    <button
-      className={`hotkey-btn ${recording ? "recording" : ""}`}
-      onClick={start}
-      type="button"
-    >
-      {recording ? "按下组合键…" : hotkeyLabel(value)}
-    </button>
+    <>
+      <button
+        className={`hotkey-btn ${recording ? "recording" : ""}`}
+        onClick={start}
+        type="button"
+      >
+        {recording ? t("settings.hotkeyRecording") : hotkeyLabel(value)}
+      </button>
+      {invalid && <span className="hint">{t("settings.hotkeyNeedModifier")}</span>}
+    </>
   );
 }
 

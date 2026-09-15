@@ -5,7 +5,7 @@
 //! performing the cleanup via `NtSetSystemInformation`.
 
 use crate::ntapi::*;
-use windows::Win32::Foundation::{HANDLE, NTSTATUS};
+use windows::Win32::Foundation::HANDLE;
 
 /// Memory cleaning mask bits (mirrors the original Mem Reduct `REDUCT_*`).
 pub mod mask {
@@ -47,8 +47,11 @@ pub mod mask {
     /// Regions that can cause freezes (standby list + modified list).
     pub const FREEZES: u32 = STANDBYLIST | MODIFIEDLIST;
 
-    /// Region names for display / notifications.
-    /// Region keys (matching the frontend i18n `regions.*` keys) for display.
+    /// Region keys (matching the frontend i18n `regions.*` keys) for display
+    /// and notifications.
+    ///
+    /// The order MUST match `REGIONS` in `src/regions.ts` so a result list read
+    /// by the UI is in the same order as the checkboxes the user ticked.
     pub fn names(value: u32) -> Vec<&'static str> {
         let mut out = Vec::new();
         if value & WORKINGSET != 0 {
@@ -57,23 +60,23 @@ pub mod mask {
         if value & SYSTEMFILECACHE != 0 {
             out.push("systemFileCache");
         }
-        if value & MODIFIEDFILECACHE != 0 {
-            out.push("modifiedFileCache");
-        }
-        if value & MODIFIEDLIST != 0 {
-            out.push("modifiedList");
+        if value & STANDBYPRIORITY0LIST != 0 {
+            out.push("standbyPriority0");
         }
         if value & STANDBYLIST != 0 {
             out.push("standbyList");
         }
-        if value & STANDBYPRIORITY0LIST != 0 {
-            out.push("standbyPriority0");
+        if value & MODIFIEDLIST != 0 {
+            out.push("modifiedList");
+        }
+        if value & COMBINEMEMORYLISTS != 0 {
+            out.push("combineMemoryLists");
         }
         if value & REGISTRYCACHE != 0 {
             out.push("registryCache");
         }
-        if value & COMBINEMEMORYLISTS != 0 {
-            out.push("combineMemoryLists");
+        if value & MODIFIEDFILECACHE != 0 {
+            out.push("modifiedFileCache");
         }
         out
     }
@@ -106,9 +109,16 @@ fn calc_percent(used: u64, total: u64) -> (u32, f64) {
     (p as u32, p)
 }
 
-/// Query the system build version via `RtlGetVersion`.
+/// Cached OS version.
+///
+/// `RtlGetVersion` cannot change during a process' lifetime, but the cleanup
+/// path used to call it twice per clean (via `is_win8_1_plus` /
+/// `is_win10_plus`) on top of every memory sample.
+static OS_VERSION: std::sync::OnceLock<(u32, u32)> = std::sync::OnceLock::new();
+
+/// Query the system build version via `RtlGetVersion` (cached).
 pub fn os_version() -> (u32, u32) {
-    unsafe {
+    *OS_VERSION.get_or_init(|| unsafe {
         let mut vi: RTL_OSVERSIONINFOW = RTL_OSVERSIONINFOW {
             dwOSVersionInfoSize: core::mem::size_of::<RTL_OSVERSIONINFOW>() as u32,
             ..Default::default()
@@ -120,7 +130,7 @@ pub fn os_version() -> (u32, u32) {
             // fallback: assume Win10+ (matches common modern systems)
             (10, 0)
         }
-    }
+    })
 }
 
 /// True on Windows 8.1+ (registry cache feature).
@@ -230,21 +240,21 @@ unsafe fn read_pagefile_info(page_size: u64) -> MemoryObject {
         let base = buf.as_ptr();
         let buf_len = buf.len();
         let mut offset: usize = 0;
-        let mut first = true;
-        while offset < buf_len {
+        loop {
             // Guard against malformed offsets to avoid a panic on bad data.
+            if offset >= buf_len {
+                break;
+            }
             let Some(entry) =
                 (unsafe { (base.add(offset) as *const SYSTEM_PAGEFILE_INFORMATION).as_ref() })
             else {
                 break;
             };
-            if entry.NextEntryOffset == 0 && !first {
-                break;
-            }
             obj.total_bytes += entry.TotalSize as u64 * page_size;
-            obj.free_bytes += (entry.TotalSize - entry.TotalInUse) as u64 * page_size;
+            // `TotalInUse` can exceed `TotalSize` in a torn sample; saturate
+            // instead of underflowing (which panics in debug builds).
+            obj.free_bytes += entry.TotalSize.saturating_sub(entry.TotalInUse) as u64 * page_size;
             obj.used_bytes += entry.TotalInUse as u64 * page_size;
-            first = false;
             if entry.NextEntryOffset == 0 {
                 break;
             }
@@ -269,51 +279,94 @@ pub struct CleanResult {
     pub applied_mask: u32,
     /// Names of the regions that were cleaned.
     pub regions: Vec<String>,
-    /// True when an elevation (UAC) request was submitted instead of cleaning
-    /// in-process; the elevated helper performs the actual cleanup.
+    /// Region keys whose underlying NT call failed (`STATUS_*`).
+    ///
+    /// Surfaced to the UI so "freed 0 B" can be explained — without this the
+    /// app silently swallowed `STATUS_PRIVILEGE_NOT_HELD` and looked broken.
     #[serde(default)]
-    pub elevation_requested: bool,
+    pub failed: Vec<String>,
 }
 
-/// Flush volume cache by opening each volume and calling `FlushFileBuffers`.
+/// Volumes to skip when flushing the modified file cache.
+///
+/// These are the drive types whose `CreateFileW` can block for seconds (a
+/// spun-down optical drive, a mapped-but-disconnected network share) or fail
+/// outright; flushing them is not worth freezing the UI for.
+///
+/// Values mirror `DRIVE_*` in `Win32::System::WindowsProgramming` (that feature
+/// is not enabled, so they are declared locally).
+const DRIVE_NO_ROOT_DIR: u32 = 1;
+const DRIVE_REMOTE: u32 = 4;
+const DRIVE_CDROM: u32 = 5;
+
+/// Flush volume cache by opening each *existing* volume and calling
+/// `FlushFileBuffers`.
 ///
 /// This mirrors the original `_app_flushvolumecache` (modified file cache).
-fn flush_volume_cache() {
-    // The original implementation enumerates mount points and flushes each
-    // volume. For our clean implementation we enumerate drive letters and
-    // flush their root handles.
-    let letters = [
-        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R',
-        'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-    ];
+/// The original enumerates mount points; the previous implementation blindly
+/// probed `\\?\A:` … `\\?\Z:`, which could stall the calling thread on media
+/// that is not ready. `GetLogicalDrives` + `GetDriveTypeW` restrict the work to
+/// volumes that actually exist and are safe to open synchronously.
+///
+/// Returns `false` when at least one volume could not be opened or flushed.
+fn flush_volume_cache() -> bool {
+    use windows::Win32::Foundation::{CloseHandle, GENERIC_WRITE};
+    use windows::Win32::Storage::FileSystem::{
+        CreateFileW, FlushFileBuffers, GetDriveTypeW, GetLogicalDrives, FILE_ATTRIBUTE_NORMAL,
+        FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
 
-    for letter in letters {
-        let path = format!(r"\\?\{letter}:\");
-        if let Some(c) = wide(path.as_str()) {
-            unsafe {
-                let handle = windows::Win32::Storage::FileSystem::CreateFileW(
-                    windows::core::PCWSTR(c.as_ptr()),
-                    windows::Win32::Foundation::GENERIC_WRITE.0,
-                    windows::Win32::Storage::FileSystem::FILE_SHARE_READ
-                        | windows::Win32::Storage::FileSystem::FILE_SHARE_WRITE,
-                    None,
-                    windows::Win32::Storage::FileSystem::OPEN_EXISTING,
-                    windows::Win32::Storage::FileSystem::FILE_ATTRIBUTE_NORMAL,
-                    HANDLE(std::ptr::null_mut()),
-                );
-                if let Ok(h) = handle {
-                    let _ = windows::Win32::Storage::FileSystem::FlushFileBuffers(h);
-                    let _ = windows::Win32::Foundation::CloseHandle(h);
+    let present = unsafe { GetLogicalDrives() };
+    if present == 0 {
+        // No bit set means the query itself failed; treat it as "nothing done".
+        return true;
+    }
+
+    let mut ok = true;
+
+    for index in 0..26u32 {
+        if present & (1 << index) == 0 {
+            continue;
+        }
+
+        let root = format!("{}:\\", (b'A' + index as u8) as char);
+        let mut root_wide: Vec<u16> = root.encode_utf16().collect();
+        root_wide.push(0);
+
+        let drive_type = unsafe { GetDriveTypeW(windows::core::PCWSTR(root_wide.as_ptr())) };
+        if matches!(drive_type, DRIVE_NO_ROOT_DIR | DRIVE_REMOTE | DRIVE_CDROM) {
+            continue;
+        }
+
+        // `\\?\` bypasses path parsing so a volume handle is opened directly.
+        let path = format!(r"\\?\{}", root);
+        let mut wide: Vec<u16> = path.encode_utf16().collect();
+        wide.push(0);
+
+        unsafe {
+            match CreateFileW(
+                windows::core::PCWSTR(wide.as_ptr()),
+                GENERIC_WRITE.0,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                None,
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                HANDLE(std::ptr::null_mut()),
+            ) {
+                Ok(handle) => {
+                    if FlushFileBuffers(handle).is_err() {
+                        ok = false;
+                    }
+                    let _ = CloseHandle(handle);
                 }
+                // A volume we cannot open (e.g. no write access without admin)
+                // counts as a failure so the UI can say which region did not run.
+                Err(_) => ok = false,
             }
         }
     }
-}
 
-fn wide(s: &str) -> Option<Vec<u16>> {
-    let mut v: Vec<u16> = s.encode_utf16().collect();
-    v.push(0);
-    Some(v)
+    ok
 }
 
 /// Perform a memory cleanup for the given mask.
@@ -321,10 +374,6 @@ fn wide(s: &str) -> Option<Vec<u16>> {
 /// `is_autoclean` removes the freezing regions if standby-list cleanup is not
 /// allowed, exactly as the original does.
 pub fn clean_memory(mask: u32, allow_standby_in_auto: bool, is_autoclean: bool) -> CleanResult {
-    // Already elevated? We rely on the app requesting admin at startup. If not
-    // elevated the OS will reject the NtSetSystemInformation calls; we still
-    // attempt and report results.
-
     // Enable the SeProfileSingleProcessPrivilege / SeIncreaseQuotaPrivilege
     // privileges required by the NT memory calls (as the original does).
     crate::elevation::enable_memory_privileges();
@@ -336,11 +385,22 @@ pub fn clean_memory(mask: u32, allow_standby_in_auto: bool, is_autoclean: bool) 
 
     let before = get_memory_info().physical_memory.used_bytes;
 
+    // Region keys whose NT call did not succeed. Collected instead of ignored
+    // so the caller can distinguish "nothing to free" from "we were not allowed".
+    let mut failed: Vec<String> = Vec::new();
+
+    /// Record a failing region.
+    fn note(failed: &mut Vec<String>, region: &str, success: bool) {
+        if !success {
+            failed.push(region.to_string());
+        }
+    }
+
     unsafe {
         // Working set (vista+)
         if applied_mask & mask::WORKINGSET != 0 {
-            let mut command = SystemMemoryListCommand::MemoryEmptyWorkingSets as i32;
-            let _ = nt_set_memory_list(&mut command);
+            let ok = nt_set_memory_list(SystemMemoryListCommand::MemoryEmptyWorkingSets);
+            note(&mut failed, "workingSet", ok);
         }
 
         // System file cache
@@ -350,43 +410,46 @@ pub fn clean_memory(mask: u32, allow_standby_in_auto: bool, is_autoclean: bool) 
                 MaximumWorkingSet: usize::MAX,
                 ..Default::default()
             };
-            let _ = NtSetSystemInformation(
+            let status = NtSetSystemInformation(
                 SystemInformationClass::SystemFileCacheInformationEx as i32,
                 &mut sfci as *mut _ as *mut core::ffi::c_void,
                 core::mem::size_of::<SYSTEM_FILECACHE_INFORMATION>() as u32,
             );
+            note(&mut failed, "systemFileCache", NT_SUCCESS(status));
         }
 
         // Flush volume cache
         if applied_mask & mask::MODIFIEDFILECACHE != 0 {
-            flush_volume_cache();
+            let ok = flush_volume_cache();
+            note(&mut failed, "modifiedFileCache", ok);
         }
 
         // Modified page list
         if applied_mask & mask::MODIFIEDLIST != 0 {
-            let mut command = SystemMemoryListCommand::MemoryFlushModifiedList as i32;
-            let _ = nt_set_memory_list(&mut command);
+            let ok = nt_set_memory_list(SystemMemoryListCommand::MemoryFlushModifiedList);
+            note(&mut failed, "modifiedList", ok);
         }
 
         // Standby list
         if applied_mask & mask::STANDBYLIST != 0 {
-            let mut command = SystemMemoryListCommand::MemoryPurgeStandbyList as i32;
-            let _ = nt_set_memory_list(&mut command);
+            let ok = nt_set_memory_list(SystemMemoryListCommand::MemoryPurgeStandbyList);
+            note(&mut failed, "standbyList", ok);
         }
 
         // Standby priority-0 list
         if applied_mask & mask::STANDBYPRIORITY0LIST != 0 {
-            let mut command = SystemMemoryListCommand::MemoryPurgeLowPriorityStandbyList as i32;
-            let _ = nt_set_memory_list(&mut command);
+            let ok = nt_set_memory_list(SystemMemoryListCommand::MemoryPurgeLowPriorityStandbyList);
+            note(&mut failed, "standbyPriority0", ok);
         }
 
         // Flush registry cache (win8.1+)
         if is_win8_1_plus() && applied_mask & mask::REGISTRYCACHE != 0 {
-            let _ = NtSetSystemInformation(
+            let status = NtSetSystemInformation(
                 SystemInformationClass::SystemRegistryReconciliationInformation as i32,
                 core::ptr::null_mut(),
                 0,
             );
+            note(&mut failed, "registryCache", NT_SUCCESS(status));
         }
 
         // Combine memory lists (win10+)
@@ -397,7 +460,7 @@ pub fn clean_memory(mask: u32, allow_standby_in_auto: bool, is_autoclean: bool) 
                 &mut combine_info as *mut _ as *mut core::ffi::c_void,
                 core::mem::size_of::<MEMORY_COMBINE_INFORMATION_EX>() as u32,
             );
-            let _ = status;
+            note(&mut failed, "combineMemoryLists", NT_SUCCESS(status));
         }
     }
 
@@ -411,17 +474,21 @@ pub fn clean_memory(mask: u32, allow_standby_in_auto: bool, is_autoclean: bool) 
             .into_iter()
             .map(String::from)
             .collect(),
-        elevation_requested: false,
+        failed,
     }
 }
 
 /// Call `NtSetSystemInformation` with `SystemMemoryListInformation`.
-unsafe fn nt_set_memory_list(command: &mut i32) -> NTSTATUS {
-    NtSetSystemInformation(
+///
+/// Returns whether the command was accepted.
+unsafe fn nt_set_memory_list(command: SystemMemoryListCommand) -> bool {
+    let mut command = command as i32;
+    let status = NtSetSystemInformation(
         SystemInformationClass::SystemMemoryListInformation as i32,
-        command as *mut i32 as *mut core::ffi::c_void,
+        &mut command as *mut i32 as *mut core::ffi::c_void,
         core::mem::size_of::<i32>() as u32,
-    )
+    );
+    NT_SUCCESS(status)
 }
 
 #[cfg(test)]
@@ -467,6 +534,26 @@ mod tests {
         assert_eq!(mask::DEFAULT & mask::FREEZES, 0);
         assert_ne!(mask::DEFAULT & mask::WORKINGSET, 0);
         assert_ne!(mask::DEFAULT & mask::SYSTEMFILECACHE, 0);
+    }
+
+    #[test]
+    fn mask_names_order_matches_frontend_regions() {
+        // MUST stay identical to `REGIONS` in `src/regions.ts`, so a cleanup
+        // result reads in the same order as the checkboxes the user ticked.
+        assert_eq!(
+            mask::names(mask::ALL),
+            vec![
+                "workingSet",
+                "systemFileCache",
+                "standbyPriority0",
+                "standbyList",
+                "modifiedList",
+                "combineMemoryLists",
+                "registryCache",
+                "modifiedFileCache",
+            ]
+        );
+        assert!(mask::names(0).is_empty());
     }
 
     #[test]

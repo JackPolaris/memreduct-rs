@@ -23,9 +23,10 @@ npm run tauri dev
 ## 构建与测试
 
 ```bash
-# 前端类型检查
+# 前端类型检查 / 构建 / 图标校验
 npx tsc --noEmit
 npm run build
+node scripts/verify_icon_png.mjs
 
 # 后端格式 / 静态检查 / 测试
 cd src-tauri
@@ -42,7 +43,7 @@ npm run tauri build
 ```
 src/            React 前端 (界面 / i18n / 组件)
 src-tauri/src/  Rust 后端 (ntapi 绑定 / 内存清理 / 配置 / 托盘 / 热键)
-scripts/        图标生成脚本
+scripts/        图标生成/校验脚本 (见 scripts/README.md：当前只用蓝色位图那条链路)
 .github/        CI 工作流
 ```
 

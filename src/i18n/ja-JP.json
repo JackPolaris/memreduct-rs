@@ -21,7 +21,7 @@
     "settings": "設定",
     "about": "情報",
     "exit": "終了",
-    "website": "公式サイト"
+    "website": "プロジェクトページ"
   },
   "main": {
     "memoryUsed": "メモリ使用量",
@@ -34,15 +34,20 @@
     "cleanMemory": "メモリをクリーン",
     "cleaning": "クリーン中…",
     "released": "解放済み",
-    "elevationRequested": "管理者権限を要求しました。UAC プロンプトで許可してください",
     "nothing": "クリーン対象なし",
+    "failedCount": "件失敗",
+    "unsupported": "このシステムでは未対応",
+    "hiddenToTray": "ウィンドウをトレイに格納しました。Mem Reduct はバックグラウンドで動作中です。トレイアイコンを右クリックするとクリーンまたは終了できます。",
     "configLocation": "設定",
     "portable": "ポータブル",
     "appdata": "アプリデータ",
     "of": "合計",
     "notElevated": "管理者権限がありません - クリーンが無効になる場合があります。設定→一般 で「起動時に静かに自動実行」を有効にすると永続的に権限を取得できます",
     "none": "なし",
-    "regionsCount": "領域"
+    "regionsCount": "領域",
+    "limited": "標準権限",
+    "elevated": "管理者権限",
+    "elevatedHint": "管理者権限で実行中 — すべてのクリーン領域が利用可能です"
   },
   "confirm": {
     "title": "以下の領域をクリーンしますか?",
@@ -54,8 +59,6 @@
     "memory": "メモリ",
     "appearance": "外観",
     "tray": "トレイ",
-    "advanced": "詳細",
-    "alwaysOnTop": "常に最前面",
     "startMinimized": "最小化して起動",
     "autostart": "自動起動",
     "autostartHint": "ログオン時に管理者権限で静かにトレイへ起動し、クリーンは UAC 不要（初回のみ承認が必要）。",
@@ -64,19 +67,14 @@
     "checkUpdates": "更新を確認",
     "checkNow": "更新を確認",
     "checking": "確認中…",
-    "downloading": "ダウンロード中…",
     "installNow": "ダウンロード・インストール",
     "dismiss": "閉じる",
     "updateInstalling": "新しいバージョンが見つかりました。バックグラウンドでダウンロード・インストール中…",
-    "autoCheck": "起動時に更新をチェック",
-    "updateRepo": "更新ソース",
-    "updateHint": "更新ソースは公式リポジトリに固定されています。有効にすると起動時に自動チェックし、手動での確認/インストールもできます。",
     "updateAvailable": "新しいバージョンがあります",
     "updateNone": "最新版です",
     "updateError": "更新の確認・ダウンロードに失敗しました",
     "updateTimeout": "更新の確認がタイムアウトしました。ネットワークを確認して再試行してください",
     "version": "バージョン",
-    "darkTheme": "ダークテーマ",
     "theme": "テーマ",
     "theme_light": "ライト",
     "theme_dark": "ダーク",
@@ -99,13 +97,14 @@
     "middleClickAction": "中央クリック動作",
     "warningLevel": "警告レベル(%)",
     "dangerLevel": "危険レベル(%)",
-    "notificationSound": "通知音",
     "showCleanResult": "クリーン結果バルーンを表示",
-    "logCleanResults": "クリーン結果を記録",
     "hotkeyClean": "グローバルクリーンショートカット",
-    "hotkeyHint": "既定: Ctrl+F1（アプリ内で変更可）",
     "hotkeyCombo": "ショートカット",
-    "about": "情報"
+    "about": "情報",
+    "saveFailed": "設定の保存に失敗しました",
+    "hotkeyRecording": "キーの組み合わせを押してください…",
+    "hotkeyFailed": "ショートカットを登録できませんでした（他アプリが使用中の可能性があります）。別の組み合わせを選んでください",
+    "hotkeyNeedModifier": "グローバルショートカットには修飾キー(Ctrl/Alt/Shift/Win)または F1–F24 が必要です"
   },
   "regions": {
     "workingSet": "ワーキングセット",
@@ -117,14 +116,17 @@
     "registryCache": "レジストリキャッシュ",
     "combineMemoryLists": "メモリリスト統合"
   },
-  "result": {
-    "auto": "自動クリーン",
-    "manual": "手動クリーン",
-    "hotkey": "ショートカット",
-    "cmdline": "コマンドライン"
-  },
   "about": {
     "website": "プロジェクトページ",
     "license": "このプロジェクトは GPL-3.0 ライセンスでオープンソース公開されています。"
+  },
+  "accent": {
+    "green": "グリーン",
+    "purple": "パープル",
+    "blue": "ブルー",
+    "orange": "オレンジ",
+    "red": "レッド",
+    "cyan": "シアン",
+    "pink": "ピンク"
   }
 }

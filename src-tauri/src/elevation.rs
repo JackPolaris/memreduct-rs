@@ -147,8 +147,24 @@ pub fn relaunch_self_as_admin() -> bool {
         return false;
     };
 
-    // Original command line (keeps any args the user launched with).
-    let cmdline = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
+    // Original command line, quoted back together (arguments with spaces would
+    // otherwise be split apart), minus `-startup`: the user is interacting with
+    // the window right now, so the elevated instance must open its window rather
+    // than start hidden in the tray.
+    let mut cmdline = std::env::args()
+        .skip(1)
+        .filter(|arg| {
+            arg != crate::autostart::STARTUP_ARG && arg != crate::single_instance::TAKEOVER_ARG
+        })
+        .map(|arg| quote_arg(&arg))
+        .collect::<Vec<_>>();
+
+    // Mark this as a hand-over. The replacement instance starts while *this*
+    // process is still shutting down, so it must wait for the single-instance
+    // mutex instead of reporting "another instance is already running" and
+    // quitting — which would leave the user with no window at all.
+    cmdline.push(crate::single_instance::TAKEOVER_ARG.to_string());
+    let cmdline = cmdline.join(" ");
 
     // Current working directory (mirrors _r_sys_getcurrentdirectory).
     let cwd = std::env::current_dir().ok();
@@ -181,5 +197,77 @@ pub fn relaunch_self_as_admin() -> bool {
         );
         // ShellExecuteW returns a value greater than 32 on success.
         result.0 as usize > 32
+    }
+}
+
+/// Quote a single command-line argument so it survives being joined back into a
+/// command-line string (Windows `CommandLineToArgvW` rules: wrap in quotes and
+/// escape embedded quotes/backslashes).
+fn quote_arg(arg: &str) -> String {
+    if !arg.is_empty() && !arg.contains([' ', '\t', '"']) {
+        return arg.to_string();
+    }
+    let mut out = String::with_capacity(arg.len() + 2);
+    out.push('"');
+    let mut backslashes = 0usize;
+    for ch in arg.chars() {
+        match ch {
+            '\\' => {
+                backslashes += 1;
+                out.push('\\');
+            }
+            '"' => {
+                // Double the preceding backslashes, then escape the quote.
+                for _ in 0..backslashes {
+                    out.push('\\');
+                }
+                backslashes = 0;
+                out.push('\\');
+                out.push('"');
+            }
+            _ => {
+                backslashes = 0;
+                out.push(ch);
+            }
+        }
+    }
+    // A trailing backslash would escape the closing quote.
+    for _ in 0..backslashes {
+        out.push('\\');
+    }
+    out.push('"');
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn quoting_keeps_plain_arguments_intact() {
+        assert_eq!(quote_arg("-clean"), "-clean");
+        assert_eq!(quote_arg("C:\\path\\file.txt"), "C:\\path\\file.txt");
+    }
+
+    #[test]
+    fn quoting_wraps_arguments_with_spaces() {
+        assert_eq!(
+            quote_arg("C:\\Program Files\\app.exe"),
+            "\"C:\\Program Files\\app.exe\""
+        );
+        assert_eq!(quote_arg(""), "\"\"");
+    }
+
+    #[test]
+    fn quoting_escapes_embedded_quotes_and_trailing_backslashes() {
+        assert_eq!(quote_arg("a\"b"), "\"a\\\"b\"");
+        // Unquoted arguments keep their backslashes verbatim …
+        assert_eq!(quote_arg("dir\\"), "dir\\");
+        // … while a quoted argument needs the trailing backslash doubled, so it
+        // cannot escape the closing quote.
+        assert_eq!(
+            quote_arg("C:\\Program Files\\x\\"),
+            "\"C:\\Program Files\\x\\\\\""
+        );
     }
 }

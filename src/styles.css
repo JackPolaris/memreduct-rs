@@ -19,11 +19,15 @@
   --border: rgba(20, 40, 70, 0.08);
   --border-strong: rgba(20, 40, 70, 0.14);
 
-  --accent: #0b9d5e;
-  --accent-2: #06c37a;
-  --accent-soft: rgba(11, 157, 94, 0.12);
-  --accent-glow: rgba(11, 157, 94, 0.28);
-  /* Same-hue vertical gradient: accent → slightly darker accent */
+  /* The preset colour is injected at runtime as `--accent-base`; every other
+     accent tone derives from it (see `.app.dark` for the dark-mode variant). */
+  --accent-base: #0b9d5e;
+  --accent: var(--accent-base);
+  /* 13% tint of the accent, for soft fills and status chips. */
+  --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
+  /* 30% accent glow, for shadows and halos. */
+  --accent-glow: color-mix(in srgb, var(--accent) 30%, transparent);
+  /* Same-hue vertical gradient: accent → darker accent */
   --accent-grad: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 74%, #000));
   --danger: #ef4444;
   --danger-soft: rgba(239, 68, 68, 0.12);
@@ -57,11 +61,11 @@ body.dark {
   --border: rgba(150, 180, 220, 0.10);
   --border-strong: rgba(150, 180, 220, 0.18);
 
-  --accent: #21c98a;
-  --accent-2: #06b573;
-  --accent-soft: rgba(33, 201, 138, 0.16);
-  --accent-glow: rgba(33, 201, 138, 0.35);
-  --accent-grad: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 74%, #000));
+  /* Dark mode lifts the preset colour so it stays readable on the dark
+     surfaces; the tint/glow tones are re-derived from it. */
+  --accent: color-mix(in srgb, var(--accent-base) 72%, #fff);
+  --accent-soft: color-mix(in srgb, var(--accent) 17%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 36%, transparent);
   --danger: #f87171;
   --danger-soft: rgba(248, 113, 113, 0.16);
   --warning: #fbbf24;
@@ -224,6 +228,11 @@ body {
 .statuschip.ok { color: var(--accent); }
 .statuschip.warn { color: var(--warning); }
 .statuschip.crit { color: var(--danger); }
+/* Privilege badge: muted when limited, subtle accent when elevated. */
+.statuschip.plain { color: var(--muted); }
+.statuschip.plain .dot { background: var(--muted); }
+.statuschip.elevated { color: var(--accent); }
+.statuschip.elevated .dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 .statusbar-note {
   margin-left: auto;
@@ -432,11 +441,36 @@ body {
   border: 1px solid var(--border);
   cursor: pointer;
   transition: all 0.16s ease;
+  /* The region toggle is a real <button role="checkbox"> for keyboard and
+     screen-reader support, so the UA button styling has to be neutralised. */
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+  min-width: 0;
 }
 
-.region:hover {
+.region:hover:not(:disabled) {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+.region:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Region the running Windows version cannot clean — shown, but not selectable,
+   so the user is not left wondering why "全部" appears to skip something. */
+.region:disabled,
+.region.unsupported {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.region.unsupported:hover {
+  border-color: var(--border);
+  background: var(--surface2);
 }
 
 .region .check {
@@ -470,6 +504,11 @@ body {
 .region-note {
   font-size: 10.5px;
   color: var(--warning);
+}
+
+/* Non-warning note (e.g. "not supported on this system"). */
+.region-note.muted {
+  color: var(--muted);
 }
 
 .region-actions {

@@ -4,13 +4,33 @@
 //! (`JackPolaris/memreduct-rs`); the UI only exposes a single "Check for
 //! updates" button and the current version — no repo/key configuration.
 
-use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_updater::{UpdaterBuilder, UpdaterExt};
-
-use crate::AppState;
+use tauri::{AppHandle, Emitter};
+use tauri_plugin_updater::UpdaterExt;
 
 /// Official release repository (hardcoded, owner/repo).
 const UPDATE_REPO: &str = "JackPolaris/memreduct-rs";
+
+/// Release target triple of the running binary.
+///
+/// `tauri.conf.json` only substitutes `{{target}}` for endpoints declared at
+/// build time; these endpoints are assembled at runtime, so the architecture has
+/// to be mapped explicitly. A hardcoded `x86_64` made the updater a 404 for
+/// anyone running the `aarch64` (Windows on ARM) or 32-bit build.
+fn target_triple() -> &'static str {
+    match std::env::consts::ARCH {
+        "aarch64" => "aarch64-pc-windows-msvc",
+        "x86" => "i686-pc-windows-msvc",
+        _ => "x86_64-pc-windows-msvc",
+    }
+}
+
+/// Full URL of the update manifest for this architecture.
+fn manifest_url() -> String {
+    format!(
+        "https://github.com/{UPDATE_REPO}/releases/latest/download/update-{}.json",
+        target_triple()
+    )
+}
 
 /// Serialisable update info returned to the frontend.
 #[derive(Debug, serde::Serialize)]
@@ -23,31 +43,18 @@ pub struct UpdateInfo {
 }
 
 /// Build the updater against the hardcoded official repository.
+///
+/// The signing public key comes from `tauri.conf.json`
+/// (`plugins.updater.pubkey`), which `updater_builder()` picks up — it is not
+/// duplicated in the user config any more.
 fn build_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
-    // Note: `{{target}}` is substituted at build time ONLY for endpoints in
-    // tauri.conf.json; since these endpoints are set at runtime we use the
-    // concrete Windows target directly.
-    let endpoints = format!(
-        "https://github.com/{UPDATE_REPO}/releases/latest/download/update-x86_64-pc-windows-msvc.json"
-    );
+    let endpoint = manifest_url();
 
-    let pubkey = app
-        .state::<AppState>()
-        .config
-        .lock()
-        .map(|c| c.update_pubkey.clone())
-        .unwrap_or_default();
-
-    let mut builder: UpdaterBuilder = app
-        .updater_builder()
-        .endpoints(vec![url::Url::parse(&endpoints).map_err(|e| e.to_string())?])
-        .map_err(|e| e.to_string())?;
-
-    if !pubkey.trim().is_empty() {
-        builder = builder.pubkey(pubkey.trim().to_string());
-    }
-
-    builder.build().map_err(|e| e.to_string())
+    app.updater_builder()
+        .endpoints(vec![url::Url::parse(&endpoint).map_err(|e| e.to_string())?])
+        .map_err(|e| e.to_string())?
+        .build()
+        .map_err(|e| e.to_string())
 }
 
 /// Check for an update against the official repository.

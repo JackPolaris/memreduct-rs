@@ -21,7 +21,7 @@
     "settings": "设置",
     "about": "关于",
     "exit": "退出",
-    "website": "官方网站"
+    "website": "项目主页"
   },
   "main": {
     "memoryUsed": "内存已用",
@@ -34,15 +34,20 @@
     "cleanMemory": "清理内存",
     "cleaning": "清理中…",
     "released": "释放了",
-    "elevationRequested": "已请求管理员权限，请在 UAC 弹窗中允许后完成清理",
     "nothing": "未清理任何区域",
+    "failedCount": "个失败",
+    "unsupported": "当前系统不支持",
+    "hiddenToTray": "窗口已最小化到托盘，程序仍在后台运行。右键托盘图标可清理内存或退出。",
     "configLocation": "配置",
     "portable": "便携模式",
     "appdata": "应用数据",
     "of": "共",
     "notElevated": "未获取管理员权限，清理可能无效——可在 设置→常规 开启「开机静默自启」永久获取",
     "none": "无",
-    "regionsCount": "个区域"
+    "regionsCount": "个区域",
+    "limited": "普通权限",
+    "elevated": "管理员权限",
+    "elevatedHint": "已获取管理员权限,所有清理功能可用"
   },
   "confirm": {
     "title": "确认清理以下区域?",
@@ -58,9 +63,7 @@
     "memory": "内存",
     "appearance": "外观",
     "tray": "托盘",
-    "advanced": "高级",
     "about": "关于",
-    "alwaysOnTop": "窗口置顶",
     "startMinimized": "启动时最小化",
     "autostart": "开机自启",
     "autostartHint": "开机时以管理员权限静默启动到托盘，清理免 UAC（首次开启需授权一次）。",
@@ -69,20 +72,14 @@
     "checkUpdates": "检查更新",
     "checkNow": "检查更新",
     "checking": "检查中…",
-    "downloading": "下载中…",
-    "checkUpdates": "检查更新",
     "installNow": "下载安装",
     "dismiss": "关闭",
     "updateInstalling": "发现新版本，正在后台下载并安装…",
-    "autoCheck": "启动时自动检查更新",
-    "updateRepo": "更新源",
-    "updateHint": "更新源已固定为官方仓库。启用后启动时自动检查更新,也可手动检查/下载安装。",
     "updateAvailable": "发现新版本",
     "updateNone": "当前已是最新版本",
     "updateError": "检查/下载更新失败",
     "updateTimeout": "检查更新超时，请检查网络后重试",
     "version": "版本",
-    "darkTheme": "深色主题",
     "theme": "主题",
     "theme_light": "浅色",
     "theme_dark": "深色",
@@ -105,12 +102,13 @@
     "middleClickAction": "中键动作",
     "warningLevel": "警告级别(%)",
     "dangerLevel": "危险级别(%)",
-    "notificationSound": "通知声音",
     "showCleanResult": "显示清理结果气泡",
-    "logCleanResults": "记录清理结果",
     "hotkeyClean": "全局清理热键",
-    "hotkeyHint": "默认热键：Ctrl+F1（可在应用内修改）",
-    "hotkeyCombo": "热键组合"
+    "hotkeyCombo": "热键组合",
+    "saveFailed": "保存设置失败",
+    "hotkeyRecording": "按下组合键…",
+    "hotkeyFailed": "热键注册失败：可能已被其他程序占用，请换一个组合键",
+    "hotkeyNeedModifier": "全局热键需要至少一个修饰键(Ctrl/Alt/Shift/Win),或使用 F1–F24"
   },
   "regions": {
     "workingSet": "工作集",
@@ -122,10 +120,13 @@
     "registryCache": "注册表缓存",
     "combineMemoryLists": "合并内存列表"
   },
-  "result": {
-    "auto": "自动清理",
-    "manual": "手动清理",
-    "hotkey": "热键清理",
-    "cmdline": "命令行清理"
+  "accent": {
+    "green": "绿",
+    "purple": "紫",
+    "blue": "蓝",
+    "orange": "橙",
+    "red": "红",
+    "cyan": "青",
+    "pink": "粉"
   }
 }

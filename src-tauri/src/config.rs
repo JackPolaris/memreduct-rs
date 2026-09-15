@@ -20,10 +20,8 @@ pub enum ConfigLocation {
 #[serde(default)]
 pub struct Config {
     // General
-    pub always_on_top: bool,
     pub start_minimized: bool,
     pub show_reduct_confirmation: bool,
-    pub check_updates: bool,
     // Theme: "light" | "dark" | "system"
     pub theme: String,
     // Accent color preset key (e.g. "green", "purple", "blue", ...).
@@ -49,40 +47,109 @@ pub struct Config {
     pub tray_show_border: bool,
     pub tray_round_corners: bool,
     pub tray_change_bg: bool,
-    pub tray_use_antialiasing: bool,
     pub tray_color_text: u32,
     pub tray_color_bg: u32,
     pub tray_color_warning: u32,
     pub tray_color_danger: u32,
-    pub tray_font: String,
 
     // Tray behaviour
     pub tray_action_dc: u32, // double-click
     pub tray_action_mc: u32, // middle-click
     pub tray_level_warning: u32,
     pub tray_level_danger: u32,
+    /// Whether the one-off "still running in the tray" hint has been shown.
+    pub tray_tip_shown: bool,
 
     // Notifications
-    pub notifications_sound: bool,
     pub balloon_clean_results: bool,
-    pub log_clean_results: bool,
-
-    // Updater (hardcoded to the official repository).
-    pub update_repo: String,
-    // Updater signing public key; empty = verification not possible
-    pub update_pubkey: String,
 
     // Statistics
     pub statistic_last_reduct: i64,
 }
 
+/// Theme values accepted by the UI (`light` | `dark` | `system`).
+pub const THEMES: [&str; 3] = ["light", "dark", "system"];
+
+/// Accent preset keys — MUST stay in sync with `src/accents.ts`.
+pub const ACCENT_KEYS: [&str; 7] = ["green", "purple", "blue", "orange", "red", "cyan", "pink"];
+
+/// Locales that actually ship a translation bundle — MUST stay in sync with
+/// `src/i18n/index.ts`.
+pub const LANGUAGES: [&str; 4] = ["zh-CN", "zh-TW", "en-US", "ja-JP"];
+
+/// Tray click actions.
+pub const TRAY_ACTION_SHOW: u32 = 0;
+pub const TRAY_ACTION_CLEAN: u32 = 1;
+
+impl Config {
+    /// Clamp / validate every field to a value the rest of the app can rely on.
+    ///
+    /// The config file is user-editable (and older builds wrote values the
+    /// current UI can no longer produce), so nothing downstream may assume the
+    /// stored numbers are sane. Without this, for example, an
+    /// `autoreduct_interval_value` of `0` makes the interval condition
+    /// (`elapsed >= 0`) always true and the app cleans every 30 s forever.
+    pub fn sanitize(&mut self) {
+        if !THEMES.contains(&self.theme.as_str()) {
+            self.theme = "system".into();
+        }
+        if !ACCENT_KEYS.contains(&self.accent_color.as_str()) {
+            self.accent_color = "green".into();
+        }
+        if !LANGUAGES.contains(&self.language.as_str()) {
+            self.language = "zh-CN".into();
+        }
+
+        // Only the 8 documented region bits are meaningful.
+        self.reduct_mask &= crate::memory::mask::ALL;
+
+        // A threshold of 0 would clean on every tick; an interval of 0 would
+        // satisfy `elapsed >= 0`. Both are clamped to the UI's own ranges.
+        self.autoreduct_value = self.autoreduct_value.clamp(1, 100);
+        self.autoreduct_interval_value = self.autoreduct_interval_value.clamp(1, 1440);
+
+        // Tray thresholds must stay ordered: the icon picks the danger colour
+        // first, so `warning >= danger` would silently hide the warning state.
+        self.tray_level_warning = self.tray_level_warning.min(99);
+        self.tray_level_danger = self.tray_level_danger.clamp(1, 100);
+        if self.tray_level_warning >= self.tray_level_danger {
+            self.tray_level_warning = self.tray_level_danger - 1;
+        }
+
+        // Only the two documented click actions exist.
+        if self.tray_action_dc > TRAY_ACTION_CLEAN {
+            self.tray_action_dc = TRAY_ACTION_SHOW;
+        }
+        if self.tray_action_mc > TRAY_ACTION_CLEAN {
+            self.tray_action_mc = TRAY_ACTION_SHOW;
+        }
+
+        // Colours are stored as 0x00RRGGBB.
+        self.tray_color_text &= 0x00FF_FFFF;
+        self.tray_color_bg &= 0x00FF_FFFF;
+        self.tray_color_warning &= 0x00FF_FFFF;
+        self.tray_color_danger &= 0x00FF_FFFF;
+
+        // A hotkey with virtual key 0 can never be registered; fall back to the
+        // documented default (Ctrl+F1).
+        if self.hotkey_clean & 0xFFFF == 0 {
+            self.hotkey_clean = DEFAULT_HOTKEY_CLEAN;
+        }
+
+        if self.statistic_last_reduct < 0 {
+            self.statistic_last_reduct = 0;
+        }
+    }
+}
+
+/// Default global clean hotkey: Ctrl + F1, encoded as `(mods << 16) | vk`.
+pub const DEFAULT_HOTKEY_CLEAN: u32 = (0x0002u32 << 16) | 0x71;
+
 impl Default for Config {
     fn default() -> Self {
         Self {
-            always_on_top: false,
             start_minimized: false,
             show_reduct_confirmation: true,
-            check_updates: false,
             theme: "system".into(),
             accent_color: "green".into(),
             use_dark_theme: false,
@@ -96,31 +163,24 @@ impl Default for Config {
             reduct_mask: crate::memory::mask::DEFAULT,
 
             hotkey_clean_enable: false,
-            // encoded as (modifiers << 16) | vk ; default Ctrl (0x0002) + F1 (0x71)
-            hotkey_clean: (0x0002u32 << 16) | 0x71,
+            hotkey_clean: DEFAULT_HOTKEY_CLEAN,
 
             tray_use_transparency: false,
             tray_show_border: false,
             tray_round_corners: false,
             tray_change_bg: true,
-            tray_use_antialiasing: false,
             tray_color_text: 0x00FFFFFF, // white
             tray_color_bg: 0x00008040,   // green
             tray_color_warning: 0x00FF8040,
             tray_color_danger: 0x00EC1C24,
-            tray_font: "Lucida Console".into(),
 
-            tray_action_dc: 0, // show
-            tray_action_mc: 1, // clean
+            tray_action_dc: TRAY_ACTION_SHOW,
+            tray_action_mc: TRAY_ACTION_CLEAN,
             tray_level_warning: 70,
             tray_level_danger: 90,
+            tray_tip_shown: false,
 
-            notifications_sound: true,
             balloon_clean_results: true,
-            log_clean_results: false,
-
-            update_repo: "JackPolaris/memreduct-rs".into(),
-            update_pubkey: "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMyRkNDQ0ZDOUQyNzY4RDUKUldUVmFDZWQvTXo4TXZtODdQQUNBTTk4WXFQK1pLZkZIWVk0aGJkSStRbnBWQUo1d21uSTRQOEcK".into(),
 
             statistic_last_reduct: 0,
         }
@@ -175,30 +235,55 @@ fn config_path() -> PathBuf {
 }
 
 /// Load config from disk; returns defaults if missing or malformed.
+///
+/// A malformed file is moved aside to `config.json.bak` instead of being
+/// silently overwritten by the next save, so the user's settings can still be
+/// recovered by hand.
 pub fn load() -> Config {
     let path = config_path();
-    match fs::read_to_string(&path) {
-        Ok(raw) => serde_json::from_str::<Config>(&raw).unwrap_or_default(),
-        Err(_) => Config::default(),
+    let Ok(raw) = fs::read_to_string(&path) else {
+        return Config::default();
+    };
+    match serde_json::from_str::<Config>(&raw) {
+        Ok(mut config) => {
+            // Never hand out unvalidated values (the file is user-editable and
+            // older builds persisted ranges the current UI cannot produce).
+            config.sanitize();
+            config
+        }
+        Err(_) => {
+            let _ = fs::rename(&path, path.with_extension("json.bak"));
+            Config::default()
+        }
     }
 }
 
 /// Persist config to disk (creating directories as needed).
+///
+/// The value is sanitised first, so a malformed caller can never write a
+/// config the next `load()` would have to repair.
+///
+/// The file is written to a temporary sibling and then renamed over the real
+/// one, so an interrupted write (crash, power loss) can never leave a truncated
+/// `config.json` behind.
 pub fn save(config: &Config) -> std::io::Result<()> {
+    let mut config = config.clone();
+    config.sanitize();
+
     let path = config_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let raw = serde_json::to_string_pretty(config)?;
-    fs::write(&path, raw)
-}
-
-/// Convert a Win32 RGB value to a CSS-style hex string for the UI.
-pub fn color_to_hex(rgb: u32) -> String {
-    let r = (rgb >> 16) & 0xFF;
-    let g = (rgb >> 8) & 0xFF;
-    let b = rgb & 0xFF;
-    format!("#{:02x}{:02x}{:02x}", r, g, b)
+    let raw = serde_json::to_string_pretty(&config)?;
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, raw)?;
+    match fs::rename(&tmp, &path) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = fs::remove_file(&tmp);
+            Err(e)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -226,10 +311,65 @@ mod tests {
     }
 
     #[test]
-    fn color_conversion() {
-        // White
-        assert_eq!(color_to_hex(0x00FFFFFF), "#ffffff");
-        // Green bg (0x008040 -> #008040)
-        assert_eq!(color_to_hex(0x00008040), "#008040");
+    fn sanitize_clamps_autoclean_ranges() {
+        // 0 would make the interval condition always true → clean every 30 s.
+        let mut c = Config {
+            autoreduct_value: 0,
+            autoreduct_interval_value: 0,
+            ..Config::default()
+        };
+        c.sanitize();
+        assert_eq!(c.autoreduct_value, 1);
+        assert_eq!(c.autoreduct_interval_value, 1);
+
+        let mut c = Config {
+            autoreduct_value: 500,
+            autoreduct_interval_value: 99_999,
+            ..Config::default()
+        };
+        c.sanitize();
+        assert_eq!(c.autoreduct_value, 100);
+        assert_eq!(c.autoreduct_interval_value, 1440);
+    }
+
+    #[test]
+    fn sanitize_keeps_tray_thresholds_ordered() {
+        // Crossed thresholds would hide the warning colour entirely.
+        let mut c = Config {
+            tray_level_warning: 95,
+            tray_level_danger: 60,
+            ..Config::default()
+        };
+        c.sanitize();
+        assert!(c.tray_level_warning < c.tray_level_danger, "{c:?}");
+
+        let mut c = Config {
+            tray_level_warning: 100,
+            tray_level_danger: 100,
+            ..Config::default()
+        };
+        c.sanitize();
+        assert_eq!(c.tray_level_danger, 100);
+        assert_eq!(c.tray_level_warning, 99);
+    }
+
+    #[test]
+    fn sanitize_rejects_unknown_enums_and_bits() {
+        let mut c = Config {
+            theme: "neon".into(),
+            accent_color: "../etc/passwd".into(),
+            language: "xx-YY".into(),
+            reduct_mask: 0xFFFF_FFFF,
+            tray_action_dc: 42,
+            hotkey_clean: 0,
+            ..Config::default()
+        };
+        c.sanitize();
+        assert_eq!(c.theme, "system");
+        assert_eq!(c.accent_color, "green");
+        assert_eq!(c.language, "zh-CN");
+        assert_eq!(c.reduct_mask, crate::memory::mask::ALL);
+        assert_eq!(c.tray_action_dc, TRAY_ACTION_SHOW);
+        assert_eq!(c.hotkey_clean, DEFAULT_HOTKEY_CLEAN);
     }
 }
