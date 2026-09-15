@@ -53,6 +53,39 @@ https://github.com/JackPolaris/memreduct-rs/releases/latest/download/update-x86_
 （`aarch64` / `i686` 会各自请求 `update-aarch64-pc-windows-msvc.json` 等，
 由 `src-tauri/src/updater.rs` 按编译架构拼出。当前只发布 x86_64。）
 
+### 用脚本发布（推荐）
+
+```bash
+# 一次跑完:预检 → 改版本号 → 构建 → 生成清单 → 发布 → 校验
+npm run release -- all 3.5.14
+
+# 也可以分步执行,便于定位问题
+npm run release -- preflight     # 只做检查,无副作用
+npm run release -- bump 3.5.14
+npm run release -- build
+npm run release -- manifest
+npm run release -- publish
+npm run release -- verify
+```
+
+选项：`--dry-run` 预演、`--bundles nsis|msi|all`、`--yes` 免确认、`--allow-dirty`。
+实现与设计取舍见 `scripts/release.mjs` 头部注释。
+
+**发版请优先用脚本**，它把下面这些踩过的坑都固化了：
+
+| 脚本做的事 | 不这么做会怎样 |
+|---|---|
+| 预检私钥与 `tauri.conf.json` 里的 pubkey 是否配对 | 配错要等 11 分钟构建完才在签名步骤失败 |
+| 显式设置空的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | 缺这个变量时 CLI 会挂在密码提示上，非交互环境等于永久卡死 |
+| 同步全部 5 个文件的版本号 | `Cargo.lock` 最容易漏，且不会导致构建失败，只是元数据不一致 |
+| 清单 `url` 与资产文件名出自同一处 | 手抄文件名不一致 → 客户端下载 404 |
+| `notes` 从 `CHANGELOG.md` 对应小节自动提取 | 漏写 `notes` 时更新提示没有内容 |
+| 发布前用内置公钥对安装包做**真实 Ed25519 验签** | 签名不匹配时每个客户端都会拒绝这次更新 |
+| `git push` 被代理拦截时自动改用 GitHub REST API 推送 | 代理过滤 `github.com` 时无法发布（对象按本地重建，逐条校验 SHA 一致） |
+| 发布后校验资产、`releases/latest` 指向与远端清单 | 只有用户装不上时才发现问题 |
+
+## 手动流程（脚本出问题时的参考）
+
 ### 1. 同步版本号
 
 **五个文件**都要改，漏掉任何一个都会出问题：

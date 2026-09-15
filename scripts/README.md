@@ -1,4 +1,34 @@
-# scripts/ — 图标工具链
+# scripts/ — 发版与图标工具
+
+## release.mjs — 标准化发版流程（维护者用）
+
+```bash
+npm run release -- preflight        # 只检查：工作区、版本号一致性、私钥与公钥是否配对、tag 是否占用
+npm run release -- bump 3.5.14      # 同步 5 个文件的版本号 + 标记 CHANGELOG
+npm run release -- build            # 带签名密钥构建 NSIS（--bundles msi/all 可选）
+npm run release -- manifest         # 改名资产 + 生成更新清单 + 验签
+npm run release -- publish          # 提交、打 tag、推送、创建 release、自动校验
+npm run release -- verify           # 重新校验已发布的 release
+
+npm run release -- all 3.5.14       # 以上全部按序执行
+```
+
+选项：`--dry-run` 预演、`--yes` 免确认、`--bundles nsis|msi|all`、`--allow-dirty`。
+
+设计要点（对应曾经踩过的坑，详见脚本头部注释）：
+
+- **预检在长构建之前**完成关键校验 —— 尤其是私钥与 `tauri.conf.json` 里 pubkey 是否配对，
+  配错要等 11 分钟构建完才暴露；
+- 版本号覆盖**全部 5 个文件**（`Cargo.lock` 最容易漏）；
+- 更新清单是**手写**的：Tauri CLI 不生成 `latest.json`，脚本负责生成 `notes`（取自
+  `CHANGELOG.md`）与 `url`（与资产文件名同源，避免手抄不一致）；
+- 发布前对安装包做**真实 minisign 验签**（Node 内置 blake2b512 + Ed25519，无额外依赖），
+  不通过直接中止；
+- `git push` 被代理拦截（典型症状：`CONNECT tunnel failed, response 502`）时自动改用
+  GitHub REST API 推送，逐条校验复现的 commit SHA 与本地一致才移动 ref；
+- 发布后校验资产状态、`releases.latest` 指向与远端清单内容。
+
+## 图标工具链
 
 > 这个目录长期存在 **三套互相竞争、输出同名文件** 的图标生成脚本，
 > 每套生成的图标颜色都不一样。下面按“是否仍在维护”分组，
