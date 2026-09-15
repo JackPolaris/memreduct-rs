@@ -556,9 +556,14 @@ function pushViaApi(tag) {
       const m = line.slice(key.length + 1).match(/^(.*) <(.*)> (\d+) ([+-]\d{4})$/);
       if (!m) fail(`无法解析 ${key} 行: ${line}`);
       const offMin = (m[4][0] === "-" ? -1 : 1) * (Number(m[4].slice(1, 3)) * 60 + Number(m[4].slice(3)));
+      // GitHub needs ISO 8601 *without* fractional seconds: given
+      // "2026-09-15T11:43:18.000+08:00" it does not fail — it silently falls back
+      // to the server's current time, so the reproduced commit SHA differs on
+      // every attempt (and never matches the local one). `toISOString()` always
+      // emits milliseconds, so strip them.
       const iso = new Date((Number(m[3]) + offMin * 60) * 1000)
         .toISOString()
-        .replace("Z", `${m[4].slice(0, 3)}:${m[4].slice(3)}`);
+        .replace(/\.\d{3}Z$/, `${m[4].slice(0, 3)}:${m[4].slice(3)}`);
       return { name: m[1], email: m[2], date: iso };
     };
 
