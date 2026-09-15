@@ -86,6 +86,14 @@ body.dark {
   box-sizing: border-box;
 }
 
+/* One keyboard-focus ring for every interactive element. `:focus-visible` only
+   matches keyboard focus, so pointer users never see it — without it, tabbing
+   through the tabs, region grid and settings rows is completely invisible. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 html,
 body,
 #root {
@@ -304,6 +312,30 @@ body {
   gap: 8px;
   overflow-y: auto;
   min-height: 0;
+}
+
+/* Tab panels. Both views stay mounted so the OS view is never rebuilt when the
+   user switches tabs; the inactive one is hidden with the `hidden` attribute.
+   The `[hidden]` rule below is load-bearing: `.view` sets `display: flex`, which
+   is exactly as specific as the UA's `[hidden] { display: none }`, so without an
+   explicit override the hidden panel would stay visible. */
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.view[hidden] {
+  display: none;
+}
+
+/* The settings view has to hand a definite height down to `.settings-body`,
+   which is the element that actually scrolls (the main view scrolls its
+   content normally, inside `.content`). */
+.view-fill {
+  flex: 1;
+  min-height: 0;
+  gap: 0;
 }
 
 .glass {
@@ -1127,7 +1159,6 @@ body {
   border: 2px solid transparent;
   cursor: pointer;
   padding: 0;
-  outline: none;
   transition: transform 0.12s ease, border-color 0.12s ease;
 }
 
@@ -1173,19 +1204,9 @@ body {
 }
 
 /* Multi-line diagnostic text (e.g. the reason an update check failed). */
-.hint.update-detail {
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 11.5px;
-  padding: 4px 4px 8px;
-}
-
-.hint.update-detail.bad {
-  color: var(--danger);
-}
-
-/* `.endpoint-row` / `.endpoint-path` went with the manifest row — the About page
-   now has one human-facing link, and a failed check names the endpoint itself. */
+/* `.hint.update-detail`, `.endpoint-row` and `.endpoint-path` went with the
+   About page's diagnostic block: a failed *manual* check reports itself as a
+   toast, and a failed automatic one is only logged. */
 
 .link {
   color: var(--accent);
@@ -1259,10 +1280,55 @@ body {
   font-size: 15px;
 }
 
+/* Range inputs: the native control cannot colour its filled portion, so the
+   track is a two-stop gradient stopping at `--v` (a unitless percentage set by
+   the React component). `appearance: none` is required — without it the UA
+   paints its own track on top and the gradient is never seen. */
 .slider input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
-  accent-color: var(--accent);
-  height: 4px;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0,
+    var(--accent) calc(var(--v, 0) * 1%),
+    var(--ring-bg) calc(var(--v, 0) * 1%),
+    var(--ring-bg) 100%
+  );
+  cursor: pointer;
+}
+
+.slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.32);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.slider input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+.slider input[type="range"]::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.32);
+  cursor: pointer;
+}
+
+.slider input[type="range"]::-moz-range-track {
+  background: transparent;
 }
 
 select,
@@ -1593,6 +1659,10 @@ input[type="color"] {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), inset 0 1px 0 0 rgba(255, 255, 255, 0.7);
   pointer-events: auto;
   animation: toastIn 0.42s cubic-bezier(0.22, 1.4, 0.36, 1);
+  /* `body { user-select: none }` is right for the app chrome, but a toast can
+     carry a whole update-check failure reason (endpoint included) that the user
+     needs to copy into a bug report, and the pill only shows one line of it. */
+  user-select: text;
 }
 
 .app.dark .toast {

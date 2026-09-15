@@ -133,7 +133,6 @@ export const getUpdaterInfo = () => invoke<UpdaterInfo>("get_updater_info");
 export const getConfig = () => invoke<Config>("get_config");
 export const saveConfig = (config: Config) =>
   invoke<void>("save_config", { config });
-export const getConfigLocation = () => invoke<string>("get_config_location");
 export const getOsInfo = () => invoke<OsInfo>("get_os_info");
 export const getVersion = () => invoke<string>("get_version");
 export const openExternal = (url: string) => invoke<void>("open_external", { url });

@@ -9,6 +9,9 @@
           open /dev-mock.html            main view
                 /dev-mock.html?view=about  tray "about" event
                 /dev-mock.html?diag=1      layout overflow report overlay
+                /dev-mock.html?still=1     freeze animation/transition (layout
+                                           checks; virtual time catches the
+                                           entrance stagger mid-flight)
 -->
 <html lang="zh-CN">
   <head>
@@ -115,8 +118,6 @@
                 return true;
               case "get_version":
                 return "3.5.14";
-              case "get_config_location":
-                return "appdata";
               case "get_os_info":
                 return { major: 10, minor: 0, is_win8_1: true, is_win10: true };
               case "get_updater_info":
@@ -236,6 +237,18 @@
           }, 700);
         }
 
+        // `?still=1` freezes all animation and transition: under headless
+        // `--virtual-time-budget` the timers are fast-forwarded and a screenshot
+        // can catch an entrance animation (the region cards stagger in) or the
+        // gauge tween mid-flight, which reads as a missing card or a nonsense
+        // percentage. For layout verification, freeze instead of guessing.
+        if (params.get("still") === "1") {
+          const st = document.createElement("style");
+          st.textContent =
+            "*,*::before,*::after{animation:none !important;transition:none !important}";
+          document.head.appendChild(st);
+        }
+
         if (params.get("diag") === "1") {
           setTimeout(() => {
             const de = document.documentElement;
@@ -282,6 +295,25 @@
                 `\n--gauge-pct=${cs.getPropertyValue("--gauge-pct").trim()}` +
                 ` head.transform=${hs.transform}` +
                 ` text=${value ? value.textContent : "?"}`;
+            }
+            // Tab-panel probe: both `.view` panels stay mounted, so the thing to
+            // verify is that exactly one of them resolves to a visible `display`
+            // (a `.view { display: flex }` rule that Outranks the UA `[hidden]`
+            // rule would leave both panels on screen).
+            pre.textContent +=
+              "\npanels " +
+              [...document.querySelectorAll(".view")]
+                .map((p) => `${p.id}=${getComputedStyle(p).display}`)
+                .join(" ");
+            // Slider probe: the filled track is a gradient positioned by `--v`
+            // and needs `appearance: none` to be visible at all.
+            const rng = document.querySelector('.slider input[type="range"]');
+            if (rng) {
+              const rs = getComputedStyle(rng);
+              pre.textContent +=
+                `\nslider --v=${rs.getPropertyValue("--v").trim()}` +
+                ` h=${rs.height} appearance=${rs.appearance}` +
+                ` bg=${rs.backgroundImage.slice(0, 80)}`;
             }
             document.body.appendChild(pre);
           }, 2600);

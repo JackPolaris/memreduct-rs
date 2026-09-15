@@ -169,14 +169,6 @@ fn save_config(app: AppHandle, state: State<'_, AppState>, config: Config) -> Re
 }
 
 #[tauri::command]
-fn get_config_location() -> String {
-    match config::config_location() {
-        config::ConfigLocation::Portable => "portable".into(),
-        config::ConfigLocation::AppData => "appdata".into(),
-    }
-}
-
-#[tauri::command]
 fn get_os_info() -> OsInfo {
     let (major, minor) = memory::os_version();
     OsInfo {
@@ -618,7 +610,6 @@ pub fn run() {
             clean_memory,
             get_config,
             save_config,
-            get_config_location,
             get_os_info,
             notify,
             get_autostart,

@@ -9,7 +9,6 @@ import {
   downloadAndInstall,
   getAutostart,
   getConfig,
-  getConfigLocation,
   getMemoryInfo,
   getOsInfo,
   getUpdaterInfo,
@@ -112,18 +111,6 @@ const DEFAULT_DANGER_LEVEL = 90;
 function blockBar(percent: number, cells = 18): string {
   const filled = Math.max(0, Math.min(cells, Math.round((percent / 100) * cells)));
   return `[${"#".repeat(filled)}${"-".repeat(cells - filled)}]`;
-}
-
-/** Result of the most recent update check, shown on the About page. */
-interface CheckOutcome {
-  ok: boolean;
-  /** Version announced when `ok` and an update exists ("" when up to date). */
-  version: string;
-  /** Human-readable detail: the failure reason, or the version we are on. */
-  detail: string;
-  /** Whether a newer version was found. */
-  available: boolean;
-  at: string;
 }
 
 /**
@@ -482,14 +469,13 @@ export default function App() {
   const [selectedMask, setSelectedMask] = useState<number>(MASK_DEFAULT);
   const [cleaning, setCleaning] = useState(false);
   const [confirmMask, setConfirmMask] = useState<number | null>(null);
+  /** Element that opened the confirmation, so focus can go back to it. */
+  const confirmReturnFocus = useRef<HTMLElement | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [version, setVersion] = useState<string>("");
   const [elevated, setElevated] = useState<boolean | null>(null);
-  const [configLocation, setConfigLocation] = useState<string>("");
   /** Endpoint and version used by the updater (no network I/O). */
   const [updaterInfo, setUpdaterInfo] = useState<UpdaterInfo | null>(null);
-  /** Outcome of the most recent update check, for the About page. */
-  const [lastCheck, setLastCheck] = useState<CheckOutcome | null>(null);
   /** An announced update waiting for the user's decision (renders the banner). */
   const [availableUpdate, setAvailableUpdate] = useState<UpdateInfo | null>(null);
   /** Re-keyed on every successful cleanup to replay the gauge shockwave. */
@@ -701,11 +687,6 @@ export default function App() {
     setAvailableUpdate(info);
   }, []);
 
-  /** Remember what the last check did, so the About page can report it. */
-  const recordCheck = useCallback((outcome: Omit<CheckOutcome, "at">) => {
-    setLastCheck({ ...outcome, at: new Date().toLocaleTimeString() });
-  }, []);
-
   useEffect(() => {
     tRef.current = t;
   }, [t]);
@@ -718,7 +699,6 @@ export default function App() {
     getMemoryInfo().then(setInfo).catch(() => {});
     getVersion().then(setVersion).catch(() => {});
     isElevated().then(setElevated).catch(() => {});
-    getConfigLocation().then(setConfigLocation).catch(() => {});
     // OS capabilities gate the regions this machine can actually clean.
     getOsInfo().then(setOsInfo).catch(() => {});
     // Endpoint + current version for the About page's diagnostics.
@@ -731,25 +711,14 @@ export default function App() {
       const lang = normalizeLanguage(c.language);
       if (lang) i18n.changeLanguage(lang);
       // Startup update check (always on): show an interactive pill when a newer
-      // version exists.
-      //
-      // A failure is *recorded* instead of being swallowed: without it the user
-      // cannot tell "already up to date" apart from "the check never reached
-      // GitHub", which is exactly what a filtering proxy produces. The About
-      // page shows the outcome, with the reason (and the endpoint tried) in the
-      // failure text itself.
+      // version exists. A failure is only logged — this check is not something
+      // the user asked for, so it must not raise an error on startup. The manual
+      // "check now" button reports its outcome explicitly.
       checkForUpdate()
         .then((r) => {
-          recordCheck({
-            ok: true,
-            available: r.available,
-            version: r.available ? r.version : "",
-            detail: r.available ? `v${r.version}` : `v${r.current_version}`,
-          });
           if (r.available) showUpdatePrompt(r);
         })
         .catch((e) => {
-          recordCheck({ ok: false, available: false, version: "", detail: String(e) });
           console.warn("update check failed:", e);
         });
     });
@@ -868,6 +837,10 @@ export default function App() {
       return;
     }
     if (config?.show_reduct_confirmation) {
+      // Remember what opened the dialog: `autoFocus` moves focus inside it, so
+      // the trigger has to be captured *before* the modal mounts if it is to be
+      // restored afterwards.
+      confirmReturnFocus.current = document.activeElement as HTMLElement | null;
       setConfirmMask(selectedMask);
     } else {
       runClean(selectedMask);
@@ -882,15 +855,18 @@ export default function App() {
    * React state made those entry points disagree with what the user had ticked —
    * and lost the choice on every restart.
    */
-  const applyMask = (mask: number, persist: boolean) => {
-    const effective = supportedMask(mask, osInfo);
-    maskRef.current = effective;
-    setSelectedMask(effective);
-    if (!persist || !config) return;
-    const next: Config = { ...config, reduct_mask: effective };
-    setConfig(next);
-    saveConfig(next).catch((e) => pushToast(i18n.t("settings.saveFailed"), String(e), "info"));
-  };
+  const applyMask = useCallback(
+    (mask: number, persist: boolean) => {
+      const effective = supportedMask(mask, osInfo);
+      maskRef.current = effective;
+      setSelectedMask(effective);
+      if (!persist || !config) return;
+      const next: Config = { ...config, reduct_mask: effective };
+      setConfig(next);
+      saveConfig(next).catch((e) => pushToast(i18n.t("settings.saveFailed"), String(e), "info"));
+    },
+    [osInfo, config, pushToast]
+  );
 
   const saveConfigAndReload = useCallback(
     async (next: Config) => {
@@ -908,19 +884,34 @@ export default function App() {
     [pushToast]
   );
 
-  const toggleRegion = (bit: number) => {
-    applyMask(selectedMask & bit ? selectedMask & ~bit : selectedMask | bit, true);
-  };
+  /**
+   * Stable identity on purpose: this is what lets `RegionCard` (memoised) skip
+   * the eight region buttons on every 1 Hz memory sample. `selectedMask` only
+   * changes when the selection does, so the callback is not rebuilt once a
+   * second the way an inline arrow would be.
+   */
+  const toggleRegion = useCallback(
+    (bit: number) => {
+      applyMask(selectedMask & bit ? selectedMask & ~bit : selectedMask | bit, true);
+    },
+    [applyMask, selectedMask]
+  );
 
   // Escape closes the confirmation dialog (the overlay click alone is not
-  // discoverable, and there is no other keyboard route out of it).
+  // discoverable, and there is no other keyboard route out of it); closing also
+  // hands focus back to whatever opened it, so the dialog does not dump the user
+  // at the top of the document.
   useEffect(() => {
     if (confirmMask === null) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setConfirmMask(null);
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      confirmReturnFocus.current?.focus?.();
+      confirmReturnFocus.current = null;
+    };
   }, [confirmMask]);
 
   const phys = info?.physical_memory;
@@ -960,7 +951,10 @@ export default function App() {
           </div>
           <span className="brand-name shiny-text">{t("app.name")}</span>
         </div>
-        <nav className="tabs" ref={navRef}>
+        {/* Real tab semantics: the two views are always mounted (hidden with
+            `display: none`), so `aria-controls` is what ties a tab to its panel
+            for screen readers. */}
+        <nav className="tabs" ref={navRef} role="tablist" aria-label={t("app.name")}>
           {pill && (
             <span
               className="tab-pill"
@@ -969,6 +963,10 @@ export default function App() {
             />
           )}
           <button
+            id="tab-main"
+            role="tab"
+            aria-selected={tab === "main"}
+            aria-controls="panel-main"
             className={tab === "main" ? "active" : ""}
             onClick={() => setTab("main")}
           >
@@ -976,6 +974,10 @@ export default function App() {
             {t("app.main")}
           </button>
           <button
+            id="tab-settings"
+            role="tab"
+            aria-selected={tab === "settings"}
+            aria-controls="panel-settings"
             className={tab === "settings" ? "active" : ""}
             onClick={() => setTab("settings")}
           >
@@ -1016,7 +1018,13 @@ export default function App() {
       )}
 
       <main className="content">
-        <div style={{ display: tab === "main" ? "flex" : "none" , flexDirection: "column", gap: 14 }}>
+        <div
+          className="view"
+          id="panel-main"
+          role="tabpanel"
+          aria-labelledby="tab-main"
+          hidden={tab !== "main"}
+        >
           <>
             <div className="statusbar">
               <span className={`statuschip ${pressure}`}>
@@ -1124,6 +1132,7 @@ export default function App() {
                   return (
                     <RegionCard
                       key={r.key}
+                      bit={r.bit}
                       index={i}
                       label={t(`regions.${r.key}`)}
                       note={
@@ -1136,7 +1145,7 @@ export default function App() {
                       noteIsWarning={supported}
                       on={Boolean(selectedMask & r.bit)}
                       disabled={!supported}
-                      onClick={() => toggleRegion(r.bit)}
+                      onToggle={toggleRegion}
                     />
                   );
                 })}
@@ -1171,9 +1180,15 @@ export default function App() {
             </button>
           </>
         </div>
-        <div style={{ display: tab === "settings" ? "flex" : "none", flex: 1, minHeight: 0 }}>
+        <div
+          className="view view-fill"
+          id="panel-settings"
+          role="tabpanel"
+          aria-labelledby="tab-settings"
+          hidden={tab !== "settings"}
+        >
           {config ? (
-            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} configLocation={configLocation} section={settingsSection} onSectionChange={setSettingsSection} onToast={pushToast} updaterInfo={updaterInfo} lastCheck={lastCheck} onCheckOutcome={recordCheck} onUpdate={showUpdatePrompt} />
+            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} section={settingsSection} onSectionChange={setSettingsSection} onToast={pushToast} updaterInfo={updaterInfo} onUpdate={showUpdatePrompt} />
           ) : null}
         </div>
       </main>
@@ -1305,16 +1320,23 @@ function MetricCard({
  * Rendered as a real `role="checkbox"` button rather than a clickable `<label>`:
  * the previous markup was unreachable by keyboard and invisible to screen
  * readers, so the region selection could not be used without a mouse.
+ *
+ * Memoised, and it takes the bit rather than a pre-bound arrow so the parent can
+ * hand it one stable `onToggle`: eight of these sit on the main screen, which is
+ * re-rendered once a second by the memory sample, and none of them depend on the
+ * sample.
  */
-function RegionCard({
+const RegionCard = memo(function RegionCard({
+  bit,
   label,
   note,
   noteIsWarning,
   on,
   disabled,
   index,
-  onClick,
+  onToggle,
 }: {
+  bit: number;
   label: string;
   note: string;
   noteIsWarning: boolean;
@@ -1322,7 +1344,7 @@ function RegionCard({
   disabled: boolean;
   /** Position in the grid, fed to the CSS as `--i` for the entrance stagger. */
   index: number;
-  onClick: () => void;
+  onToggle: (bit: number) => void;
 }) {
   return (
     <button
@@ -1334,7 +1356,7 @@ function RegionCard({
       className={`region ${on ? "on" : ""} ${disabled ? "unsupported" : ""}`}
       data-spot
       style={{ "--i": index } as React.CSSProperties}
-      onClick={disabled ? undefined : onClick}
+      onClick={disabled ? undefined : () => onToggle(bit)}
       title={disabled ? note : undefined}
     >
       <span className="check">
@@ -1352,7 +1374,7 @@ function RegionCard({
       </span>
     </button>
   );
-}
+});
 
 type Section = "general" | "memory" | "appearance" | "tray" | "about";
 
@@ -1422,26 +1444,20 @@ const SettingsPanel = memo(function SettingsPanel({
   t,
   onSave,
   version,
-  configLocation,
   section,
   onSectionChange,
   onToast,
   updaterInfo,
-  lastCheck,
-  onCheckOutcome,
   onUpdate,
 }: {
   config: Config;
   t: (k: string) => string;
   onSave: (c: Config) => void;
   version: string;
-  configLocation: string;
   section: Section;
   onSectionChange: (s: Section) => void;
   onToast: (title: string, body: string, kind?: "info" | "success") => void;
   updaterInfo: UpdaterInfo | null;
-  lastCheck: CheckOutcome | null;
-  onCheckOutcome: (o: Omit<CheckOutcome, "at">) => void;
   onUpdate: (info: UpdateInfo) => void;
 }) {
   const [draft, setDraft] = useState<Config>(config);
@@ -1582,19 +1598,16 @@ const SettingsPanel = memo(function SettingsPanel({
         ),
       ]);
       if (r.available) {
-        onCheckOutcome({ ok: true, available: true, version: r.version, detail: `v${r.version}` });
         setUpdatePhase("idle");
         // Delegate to the shared update flow (interactive pill + progress).
         onUpdate(r);
       } else {
         const detail = `${t("settings.version")} ${r.current_version}`;
-        onCheckOutcome({ ok: true, available: false, version: "", detail });
         onToast(t("settings.updateNone"), detail, "success");
         notify(t("settings.updateNone"), detail, true).catch(() => {});
         setUpdatePhase("idle");
       }
     } catch (e) {
-      onCheckOutcome({ ok: false, available: false, version: "", detail: String(e) });
       onToast(t("settings.updateError"), String(e), "info");
       notify(t("settings.updateError"), String(e), true).catch(() => {});
       setUpdatePhase("idle");
@@ -1614,10 +1627,14 @@ const SettingsPanel = memo(function SettingsPanel({
 
   return (
     <div className="settings">
-      <div className="settings-tabs glass">
+      <div className="settings-tabs glass" role="tablist" aria-label={t("app.settings")}>
         {sections.map((s) => (
           <button
             key={s.id}
+            id={`stab-${s.id}`}
+            role="tab"
+            aria-selected={section === s.id}
+            aria-controls="settings-body"
             className={section === s.id ? "active" : ""}
             onClick={() => onSectionChange(s.id)}
           >
@@ -1627,7 +1644,12 @@ const SettingsPanel = memo(function SettingsPanel({
         ))}
       </div>
 
-      <div className="settings-body">
+      <div
+        className="settings-body"
+        id="settings-body"
+        role="tabpanel"
+        aria-labelledby={`stab-${section}`}
+      >
         <div className="setgroup">
           <div className="setgroup-title">{t(`settings.${section}`)}</div>
           {section === "general" && (
@@ -1774,23 +1796,6 @@ const SettingsPanel = memo(function SettingsPanel({
                 <span className="setrow-label">{t("settings.version")}</span>
                 <span className="setrow-value">{version ? `v${version}` : "…"}</span>
               </div>
-              {/* Update diagnostics: without these, a failed check is
-                  indistinguishable from "already up to date". */}
-              <div className="setrow">
-                <span className="setrow-label">{t("settings.updateLastCheck")}</span>
-                <span className={`setrow-value ${lastCheck && !lastCheck.ok ? "bad" : ""}`}>
-                  {lastCheck
-                    ? `${lastCheck.at} · ${lastCheck.ok ? t("settings.updateCheckOk") : t("settings.updateCheckFailed")}`
-                    : t("settings.updateNever")}
-                </span>
-              </div>
-              {lastCheck && (
-                <div className={`hint update-detail ${lastCheck.ok ? "" : "bad"}`}>
-                  {lastCheck.available
-                    ? `${t("settings.updateFound")} v${lastCheck.version}`
-                    : lastCheck.detail}
-                </div>
-              )}
               {/* The single human-facing entry point. This row *is* "read the
                   release notes" — a second link with that label pointed at the
                   very same URL. The raw manifest URL is gone too: it is machine
@@ -1815,19 +1820,6 @@ const SettingsPanel = memo(function SettingsPanel({
                 ) : (
                   <span className="setrow-value">…</span>
                 )}
-              </div>
-              <div className="setrow">
-                <span className="setrow-label">
-                  <span className="icon"><IconSettings size={15} /></span>
-                  {t("main.configLocation")}
-                </span>
-                <span className="setrow-value">
-                  {configLocation === "portable"
-                    ? t("main.portable")
-                    : configLocation === "appdata"
-                      ? t("main.appdata")
-                      : "…"}
-                </span>
               </div>
               <div className="setrow">
                 <span className="setrow-label">
@@ -1890,6 +1882,10 @@ function Slider({
   max: number;
   onChange: (v: number) => void;
 }) {
+  // Chromium cannot colour the filled part of a range input, so the track is
+  // painted with a two-stop gradient positioned at `--v`. `Math.max(1, …)` keeps
+  // a degenerate range (min === max) from dividing by zero.
+  const fill = ((value - min) / Math.max(1, max - min)) * 100;
   return (
     <div className="setrow slider">
       <div className="slider-head">
@@ -1902,6 +1898,7 @@ function Slider({
         max={max}
         value={value}
         aria-label={label}
+        style={{ "--v": fill } as React.CSSProperties}
         onChange={(e) => onChange(Number(e.target.value))}
       />
     </div>
