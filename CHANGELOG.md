@@ -4,7 +4,7 @@
 [henrypp/memreduct](https://github.com/henrypp/memreduct),
 复刻其私有清理 API 与全部功能。所有版本均遵循 GPL-3.0。
 
-## v3.5.14 (未发布)
+## v3.5.14 (2026-09-15)
 
 ### 修复
 - **检查更新可能永久卡住**：更新插件的 `UpdaterBuilder::timeout` 默认是 `None`，

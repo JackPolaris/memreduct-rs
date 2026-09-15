@@ -1,11 +1,11 @@
 {
-  "version": "3.5.13",
-  "notes": "Mem Reduct 3.5.13\n\n- 修复重复启动出现多个托盘图标、主界面清理区域选择不保存、全局热键失效无提示等问题\n- 新增单实例保护;配置值统一校验(0 阈值/0 间隔不再导致每 30 秒清理一次)\n- 清理失败会明确提示失败区域,命令行全部失败时返回退出码 1\n- 界面、托盘、热键、自动清理统一走同一套流程,托盘与热键清理也有结果提示",
-  "pub_date": "2026-09-15T03:06:23Z",
+  "version": "3.5.14",
+  "notes": "Mem Reduct 3.5.14\n\n- 检查更新可能永久卡住：更新插件的 `UpdaterBuilder::timeout` 默认是 `None`，\n- 代理拦截被误报成「未找到发布」：插件对非 2xx 响应不记录错误，\n- 检查更新失败完全不可见：启动时的检查把错误全部 catch 掉，\n- 「关于」页新增更新诊断：上次检查结果（时间、正常/失败、失败原因原文）与\n- 新版本提示条带上更新说明的首条要点，不再只有版本号\n- 移除非交互环境下的确认提示；手动检查的超时从 30s 调整为 35s，",
+  "pub_date": "2026-09-15T03:48:09Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TW0zYitZcGlnNGFqYnE3eWxLVFJmQ0tHYWtES0hGTWRCdmtDQ2ttK1NnbmV5YzhsOE5iWHNlR0VTcGVyUkFTZmg5STQzOSs5S2R0OFZVcW5XaXRjdHdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NDQxNTIwCWZpbGU6TWVtIFJlZHVjdF8zLjUuMTNfeDY0LXNldHVwLmV4ZQppMjFWeVZyWnRBNEIzbFE5NUl6Wkd4QjRhOVZpRlBWQThveklWWHVjV1A3blZVVzlZcXFhSm5LeVlOakRQQ0dpOHJjVTExYXFlRUhnM1MzMnAvZjBCUT09Cg==",
-      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.13/Mem.Reduct_3.5.13_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TXNReFFyaVZnQlIxUWtsR1RxTmsyMHE0SnpPOGlVNGFkYU5tdFY3L3Q3aW9TNjJRRXZzYzBUWlhUZmExZEhUUnBnTHVwN1duVUlGYmZ6RS9qOHpYRndjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NDQ0MDg3CWZpbGU6TWVtIFJlZHVjdF8zLjUuMTRfeDY0LXNldHVwLmV4ZQpDYnp1cFJnSmFudGFxc0k5dnFWQTdjWnNZU29iSjNhTkg3d2poMDREanhJY2EwRDlHUVd2SlN6bnRWNUVHSUtzdklZd0RIQ0RFVjJndXFPZkpDeUVEdz09Cg==",
+      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.14/Mem.Reduct_3.5.14_x64-setup.exe"
     }
   }
 }
