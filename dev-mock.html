@@ -19,8 +19,14 @@
         const callbacks = new Map();
         let nextId = 1;
         const listeners = new Map();
-        let used = 8.4;
-        let pct = 68;
+        const params = new URLSearchParams(location.search);
+        // `?pct=95` pins the memory pressure so the elevated states (warning /
+        // danger ring on the Clean button, warning-coloured bars) can be
+        // screenshotted on demand.
+        const pinnedPct = params.get("pct");
+        const startPct = pinnedPct ? Number(pinnedPct) : 68;
+        let used = pinnedPct ? Math.round((Number(pinnedPct) / 100) * 32 * 10) / 10 : 8.4;
+        let pct = startPct;
 
         const memoryObject = (total, usedRatio) => {
           const totalBytes = total * 1024 ** 3;
@@ -164,14 +170,36 @@
 
         // `?view=about` mimics the tray menu's "about" command (same event the
         // Rust side emits), so the About diagnostics can be screenshotted too.
-        if (new URLSearchParams(location.search).get("view") === "about") {
+        if (params.get("view") === "about") {
           setTimeout(() => emit("show-about", {}), 400);
         }
 
         // `?diag=1` overlays a layout report: any element sticking out past the
         // viewport is listed, which pinpoints horizontal overflow without a CDP
         // session. Remove with the rest of this file.
-        if (new URLSearchParams(location.search).get("diag") === "1") {
+        // `?spot=1` emulates a hover over the hero card: the cursor spotlight is
+        // a :hover effect, and headless Chrome has no pointer to hover with, so
+        // the state is forced and a synthetic pointermove is dispatched. Preview
+        // only — the app itself is untouched.
+        if (params.get("spot") === "1") {
+          const st = document.createElement("style");
+          st.textContent = "[data-spot]::before{opacity:1 !important}";
+          document.head.appendChild(st);
+          setTimeout(() => {
+            const hero = document.querySelector(".hero");
+            if (!hero) return;
+            const r = hero.getBoundingClientRect();
+            hero.dispatchEvent(
+              new PointerEvent("pointermove", {
+                bubbles: true,
+                clientX: r.left + r.width * 0.28,
+                clientY: r.top + r.height * 0.3,
+              })
+            );
+          }, 700);
+        }
+
+        if (params.get("diag") === "1") {
           setTimeout(() => {
             const de = document.documentElement;
             const offenders = [...document.querySelectorAll("body *")]

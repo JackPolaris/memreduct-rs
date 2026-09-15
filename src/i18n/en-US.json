@@ -111,9 +111,7 @@
     "updateNever": "Not checked yet",
     "updateFound": "New version available",
     "updatePage": "Latest release",
-    "updatePageOpen": "Open in browser",
-    "updateNotesLink": "Release notes",
-    "updateEndpoint": "Update manifest"
+    "updatePageOpen": "Open in browser"
   },
   "regions": {
     "workingSet": "Working Set",

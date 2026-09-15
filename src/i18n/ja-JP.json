@@ -111,9 +111,7 @@
     "updateNever": "未確認",
     "updateFound": "新しいバージョンがあります",
     "updatePage": "最新リリース",
-    "updatePageOpen": "ブラウザーで開く",
-    "updateNotesLink": "リリースノート",
-    "updateEndpoint": "更新マニフェスト"
+    "updatePageOpen": "ブラウザーで開く"
   },
   "regions": {
     "workingSet": "ワーキングセット",

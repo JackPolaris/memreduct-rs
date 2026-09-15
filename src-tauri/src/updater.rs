@@ -57,8 +57,8 @@ pub fn manifest_url() -> String {
 /// Human-facing "latest release" page.
 ///
 /// Separate from [`manifest_url`] on purpose: the manifest is machine JSON, so
-/// linking the UI at it is useless to a user (and confusing when the label reads
-/// "open in browser"). The endpoint stays available for diagnostics.
+/// linking the UI at it is useless to a user. A *failed* check still reports the
+/// endpoint it tried, which is where a filtered proxy shows up.
 pub fn release_page_url() -> String {
     format!("https://github.com/{UPDATE_REPO}/releases/latest")
 }
@@ -71,30 +71,21 @@ pub struct UpdateInfo {
     pub date: String,
     pub body: String,
     pub current_version: String,
-    /// Endpoint that was actually queried.
-    ///
-    /// Surfaced to the UI: when a check fails, "which URL did you try" is the
-    /// single most useful piece of information (a proxy that filters
-    /// `github.com` is the common cause), and previously nothing was shown.
-    pub endpoint: String,
 }
 
 /// Static updater facts, without any network I/O.
 #[derive(Debug, serde::Serialize)]
 pub struct UpdaterInfo {
     pub current_version: String,
-    /// Machine-readable manifest — used for diagnostics, shown as text.
-    pub endpoint: String,
-    /// HTML release page — this is what the UI links to for the user.
+    /// HTML release page — the only thing the UI links to.
     pub release_page: String,
 }
 
-/// Report the endpoint and current version without contacting the network.
+/// Report the current version and the release page, without touching the network.
 #[tauri::command]
 pub fn get_updater_info(app: AppHandle) -> UpdaterInfo {
     UpdaterInfo {
         current_version: app.package_info().version.to_string(),
-        endpoint: manifest_url(),
         release_page: release_page_url(),
     }
 }
@@ -188,7 +179,6 @@ fn check_failed(endpoint: &str, current: &str, reason: &str) -> String {
 /// Check for an update against the official repository.
 #[tauri::command]
 pub async fn check_for_update(app: AppHandle) -> Result<UpdateInfo, String> {
-    let endpoint = manifest_url();
     let current = app.package_info().version.to_string();
 
     match check_update(&app).await {
@@ -201,7 +191,6 @@ pub async fn check_for_update(app: AppHandle) -> Result<UpdateInfo, String> {
             date: update.date.map(|d| d.to_string()).unwrap_or_default(),
             body: update.body.clone().unwrap_or_default(),
             current_version: update.current_version.clone(),
-            endpoint,
         }),
         Ok(Checked { update: None, .. }) => Ok(UpdateInfo {
             available: false,
@@ -209,7 +198,6 @@ pub async fn check_for_update(app: AppHandle) -> Result<UpdateInfo, String> {
             date: String::new(),
             body: String::new(),
             current_version: current,
-            endpoint,
         }),
         Err(message) => {
             // Release builds have no console; keep it for debug/CI runs.

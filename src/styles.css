@@ -169,6 +169,23 @@ body {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 4px;
+  position: relative;
+}
+
+/* The active-tab background lives on a separate pill that slides between the
+   tabs — React Bits' `PillNav` without the GSAP. Its position/size are measured
+   in JS (`useSlidingTab`) because the labels resize with the language, which a
+   percentage translate cannot follow. */
+.tab-pill {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  height: calc(100% - 8px);
+  border-radius: 9px;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
 }
 
 .tabs button {
@@ -183,14 +200,14 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: all 0.18s ease;
+  transition: color 0.18s ease;
+  position: relative;
+  z-index: 1;
 }
 
 .tabs button.active {
-  background: var(--surface-solid);
   color: var(--text);
   font-weight: 600;
-  box-shadow: var(--shadow-sm);
 }
 
 /* ===== Content ===== */
@@ -582,6 +599,45 @@ body {
   overflow: hidden;
   transition: transform 0.12s ease, box-shadow 0.2s ease;
   flex-shrink: 0;
+  /* Own stacking context: the travelling ring below sits at z-index -1, which
+     has to mean "above this button's background, below its label". */
+  isolation: isolate;
+}
+
+/* ===== Pressure ring on the Clean button =====
+   React Bits' `StarBorder` adapted to a filled button: a rotating conic sweep
+   clipped by the button's own rounded rect (which already has overflow:hidden),
+   shown only while memory pressure is elevated, tinted with the pressure colour.
+
+   It is a `transform` rotation on an absolutely positioned layer, so the whole
+   thing stays on the compositor — worth caring about in a process whose job is
+   to lower CPU/memory use. */
+.clean-btn.attention {
+  box-shadow:
+    0 10px 24px var(--accent-glow),
+    0 0 0 2px var(--ring-color, var(--accent-glow));
+}
+
+.press-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 260%;
+  aspect-ratio: 1 / 1;
+  margin: -130% 0 0 -130%;
+  z-index: -1;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 62%,
+    rgba(255, 255, 255, 0.42) 74%,
+    transparent 86% 100%
+  );
+  animation: press-spin 2.6s linear infinite;
+}
+
+@keyframes press-spin {
+  to { transform: rotate(360deg); }
 }
 
 .clean-btn::after {
@@ -857,28 +913,8 @@ body {
   color: var(--danger);
 }
 
-/* Manifest URL row: the value is long and must wrap instead of stretching the
-   panel, so the row stacks and the value breaks anywhere. */
-.endpoint-row {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 5px;
-}
-
-.endpoint-path {
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: 10.5px;
-  line-height: 1.45;
-  color: var(--muted);
-  word-break: break-all;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.endpoint-path:hover {
-  color: var(--accent);
-  text-decoration: underline;
-}
+/* `.endpoint-row` / `.endpoint-path` went with the manifest row — the About page
+   now has one human-facing link, and a failed check names the endpoint itself. */
 
 .link {
   color: var(--accent);
@@ -1380,28 +1416,61 @@ input[type="color"] {
 
 /* ===== Entrance stagger =====
    Cards rise in once, on mount only — the elements are stable across the 1 Hz
-   data updates, so the animation never replays. */
+   data updates, so the animation never replays.
+
+   The delay comes from `--i`, which the JSX sets from the item's index. The
+   previous version hardcoded `:nth-child(n)` delays, so adding a region meant
+   editing the stylesheet too (and the last child silently got no delay). This is
+   React Bits' `AnimatedList` idea (per-item delay) without framer-motion. */
 @keyframes rise-in {
-  from { opacity: 0; transform: translateY(7px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(7px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .metric,
 .region {
   animation: rise-in 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
 }
 
-.region-grid .region:nth-child(1) { animation-delay: 0ms; }
-.region-grid .region:nth-child(2) { animation-delay: 35ms; }
-.region-grid .region:nth-child(3) { animation-delay: 70ms; }
-.region-grid .region:nth-child(4) { animation-delay: 105ms; }
-.region-grid .region:nth-child(5) { animation-delay: 140ms; }
-.region-grid .region:nth-child(6) { animation-delay: 175ms; }
-.region-grid .region:nth-child(7) { animation-delay: 210ms; }
-.region-grid .region:nth-child(8) { animation-delay: 245ms; }
-.metrics .metric:nth-child(1) { animation-delay: 30ms; }
-.metrics .metric:nth-child(2) { animation-delay: 90ms; }
-.metrics .metric:nth-child(3) { animation-delay: 150ms; }
+/* ===== Cursor spotlight on cards =====
+   Port of React Bits' `SpotlightCard`, which is only a `::before` radial
+   gradient driven by two CSS variables. The variables are written by a single
+   delegated listener (see `useCardSpotlight`), never by React state. */
+[data-spot] {
+  position: relative;
+  overflow: hidden;
+  --spot-x: 50%;
+  --spot-y: 50%;
+}
+
+/* The overlay is absolutely positioned, so it would otherwise paint *above* the
+   card's text (React Bits' original does, with a heavy spotlight colour). Lifting
+   the direct children keeps the wash behind the content, which matters when the
+   card is a label/value pair the user has to read. */
+[data-spot] > * {
+  position: relative;
+  z-index: 1;
+}
+
+[data-spot]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  background: radial-gradient(
+    180px circle at var(--spot-x) var(--spot-y),
+    var(--accent-soft),
+    transparent 72%
+  );
+}
+
+[data-spot]:hover::before,
+[data-spot]:focus-within::before {
+  opacity: 1;
+}
 
 /* Spark overlay for primary actions: fixed, and never intercepts input. */
 .click-spark {

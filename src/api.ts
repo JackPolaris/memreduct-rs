@@ -106,16 +106,16 @@ export interface UpdateInfo {
   date: string;
   body: string;
   current_version: string;
-  /** Endpoint that was queried — shown in the UI so a failed check is diagnosable. */
-  endpoint: string;
 }
 
-/** Static updater facts (no network I/O). */
+/**
+ * Static updater facts (no network I/O).
+ *
+ * Only the release page is exposed: the manifest URL is machine JSON that no
+ * user can act on, and a failed check already names the endpoint it tried.
+ */
 export interface UpdaterInfo {
   current_version: string;
-  /** Machine-readable manifest — diagnostics only. */
-  endpoint: string;
-  /** HTML release page — what the UI links to for the user. */
   release_page: string;
 }
 

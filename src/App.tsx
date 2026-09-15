@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import i18n from "./i18n";
@@ -191,6 +191,80 @@ function usePercentTween(value: number, reduceMotion: boolean) {
   }, [value, reduceMotion]);
 
   return ref;
+}
+
+/**
+ * Cursor-following highlight on cards — a port of React Bits' `SpotlightCard`,
+ * which is itself nothing but two CSS variables plus a `::before` radial
+ * gradient. Two deliberate changes:
+ *
+ * - **Delegated**: one `pointermove` listener on the app root instead of a React
+ *   handler per card, so the cards stay dumb and no extra listeners are created.
+ * - **No React state**: the position is written straight to a CSS variable. A
+ *   state-driven version would re-render the tree on every mouse move.
+ *
+ * Only elements carrying `data-spot` react, and the write is throttled to one
+ * per frame (a `getBoundingClientRect` per move would force layout).
+ */
+function useCardSpotlight<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    let raf = 0;
+    let pending: { el: HTMLElement; x: number; y: number } | null = null;
+    const apply = () => {
+      raf = 0;
+      const job = pending;
+      pending = null;
+      if (!job) return;
+      job.el.style.setProperty("--spot-x", `${job.x}px`);
+      job.el.style.setProperty("--spot-y", `${job.y}px`);
+    };
+    const onMove = (e: PointerEvent) => {
+      const el = (e.target as Element | null)?.closest?.("[data-spot]");
+      if (!(el instanceof HTMLElement)) return;
+      const rect = el.getBoundingClientRect();
+      pending = { el, x: e.clientX - rect.left, y: e.clientY - rect.top };
+      if (!raf) raf = requestAnimationFrame(apply);
+    };
+    root.addEventListener("pointermove", onMove);
+    return () => {
+      root.removeEventListener("pointermove", onMove);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+  return ref;
+}
+
+/**
+ * Geometry of the active tab, for the sliding pill behind it.
+ *
+ * React Bits' `PillNav` measures each item with `getBoundingClientRect` and
+ * tweens it with GSAP; this keeps the measuring part (the only part that matters
+ * — tab widths change with the language, so a percentage translate would drift)
+ * and drops the dependency: the pill is CSS-transitioned instead.
+ *
+ * `offsetLeft`/`offsetWidth` are used rather than a rect because they do not
+ * force a layout flush, and the nav is `position: relative` so they are relative
+ * to it. A `ResizeObserver` re-measures when the labels change size.
+ */
+function useSlidingTab(activeIndex: number) {
+  const navRef = useRef<HTMLElement | null>(null);
+  const [pill, setPill] = useState<{ x: number; w: number } | null>(null);
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const measure = () => {
+      const btn = nav.querySelectorAll("button")[activeIndex] as HTMLElement | undefined;
+      if (btn) setPill({ x: btn.offsetLeft, w: btn.offsetWidth });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, [activeIndex]);
+  return { navRef, pill };
 }
 
 /**
@@ -560,7 +634,8 @@ export default function App() {
       // A failure is *recorded* instead of being swallowed: without it the user
       // cannot tell "already up to date" apart from "the check never reached
       // GitHub", which is exactly what a filtering proxy produces. The About
-      // page shows the outcome and the endpoint.
+      // page shows the outcome, with the reason (and the endpoint tried) in the
+      // failure text itself.
       checkForUpdate()
         .then((r) => {
           recordCheck({
@@ -745,8 +820,13 @@ export default function App() {
   const supportedCount = REGIONS.filter((r) => isRegionSupported(r, osInfo)).length;
   // The ring number is written by a rAF loop instead of React (see the hook).
   const gaugeRef = usePercentTween(physPct, reduceMotion);
+  // Delegated cursor spotlight for the cards carrying `data-spot`.
+  const appRef = useCardSpotlight<HTMLDivElement>();
+  // Sliding pill behind the active tab (measured, so it survives a language
+  // change that resizes the labels).
+  const { navRef, pill } = useSlidingTab(tab === "main" ? 0 : 1);
   return (
-    <div className={`app ${resolvedDark ? "dark" : ""}`}>
+    <div className={`app ${resolvedDark ? "dark" : ""}`} ref={appRef}>
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark">
@@ -754,7 +834,14 @@ export default function App() {
           </div>
           <span className="brand-name shiny-text">{t("app.name")}</span>
         </div>
-        <nav className="tabs">
+        <nav className="tabs" ref={navRef}>
+          {pill && (
+            <span
+              className="tab-pill"
+              aria-hidden="true"
+              style={{ transform: `translateX(${pill.x}px)`, width: pill.w }}
+            />
+          )}
           <button
             className={tab === "main" ? "active" : ""}
             onClick={() => setTab("main")}
@@ -821,7 +908,7 @@ export default function App() {
               )}
             </div>
 
-            <section className="hero glass">
+            <section className="hero glass" data-spot>
               <div className="gauge-wrap">
                 <div
                   className="gauge"
@@ -849,6 +936,7 @@ export default function App() {
 
               <div className="metrics">
                 <MetricCard
+                  index={0}
                   icon={<IconChip size={17} />}
                   title={t("main.physical")}
                   obj={info?.physical_memory}
@@ -857,6 +945,7 @@ export default function App() {
                   dangerLevel={dangerLevel}
                 />
                 <MetricCard
+                  index={1}
                   icon={<IconDrive size={17} />}
                   title={t("main.pageFile")}
                   obj={info?.page_file}
@@ -865,6 +954,7 @@ export default function App() {
                   dangerLevel={dangerLevel}
                 />
                 <MetricCard
+                  index={2}
                   icon={<IconCache size={17} />}
                   title={t("main.systemCache")}
                   obj={info?.system_cache}
@@ -886,11 +976,12 @@ export default function App() {
                 </span>
               </div>
               <div className="region-grid">
-                {REGIONS.map((r) => {
+                {REGIONS.map((r, i) => {
                   const supported = isRegionSupported(r, osInfo);
                   return (
                     <RegionCard
                       key={r.key}
+                      index={i}
                       label={t(`regions.${r.key}`)}
                       note={
                         supported
@@ -920,7 +1011,18 @@ export default function App() {
               </div>
             </section>
 
-            <button className="clean-btn" onClick={handleClean} disabled={cleaning}>
+            {/* React Bits' `StarBorder` idea, adapted to a filled button: while
+                memory pressure is elevated the Clean button gets a sweep that
+                travels around it, tinted with the same colour the tray icon
+                would use. Render-time only — transform animation, so it stays on
+                the compositor and the CPU cost is negligible. */}
+            <button
+              className={`clean-btn ${pressure === "ok" ? "" : "attention"}`}
+              style={{ "--ring-color": pressureColor(physPct, warnLevel, dangerLevel) } as React.CSSProperties}
+              onClick={handleClean}
+              disabled={cleaning}
+            >
+              {pressure !== "ok" && <span className="press-ring" aria-hidden="true" />}
               {cleaning ? null : <IconBolt size={20} />}
               {cleaning ? t("main.cleaning") : t("main.cleanMemory")}
             </button>
@@ -1018,6 +1120,7 @@ function MetricCard({
   t,
   warnLevel,
   dangerLevel,
+  index,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -1025,6 +1128,8 @@ function MetricCard({
   t: (k: string) => string;
   warnLevel: number;
   dangerLevel: number;
+  /** Position in the list, fed to the CSS as `--i` for the entrance stagger. */
+  index: number;
 }) {
   // Render placeholders instead of nothing until the first sample arrives, so
   // the card layout never pops in after the fact.
@@ -1032,7 +1137,7 @@ function MetricCard({
   const barClass =
     pct >= dangerLevel ? "bar-fill danger" : pct >= warnLevel ? "bar-fill warn" : "bar-fill";
   return (
-    <div className="metric">
+    <div className="metric" data-spot style={{ "--i": index } as React.CSSProperties}>
       <div className="metric-icon">{icon}</div>
       <div className="metric-body">
         <div className="metric-top">
@@ -1063,6 +1168,7 @@ function RegionCard({
   noteIsWarning,
   on,
   disabled,
+  index,
   onClick,
 }: {
   label: string;
@@ -1070,6 +1176,8 @@ function RegionCard({
   noteIsWarning: boolean;
   on: boolean;
   disabled: boolean;
+  /** Position in the grid, fed to the CSS as `--i` for the entrance stagger. */
+  index: number;
   onClick: () => void;
 }) {
   return (
@@ -1080,6 +1188,8 @@ function RegionCard({
       aria-disabled={disabled}
       disabled={disabled}
       className={`region ${on ? "on" : ""} ${disabled ? "unsupported" : ""}`}
+      data-spot
+      style={{ "--i": index } as React.CSSProperties}
       onClick={disabled ? undefined : onClick}
       title={disabled ? note : undefined}
     >
@@ -1439,27 +1549,16 @@ const SettingsPanel = memo(function SettingsPanel({
               </div>
               {lastCheck && (
                 <div className={`hint update-detail ${lastCheck.ok ? "" : "bad"}`}>
-                  {lastCheck.available ? (
-                    <>
-                      {t("settings.updateFound")} v{lastCheck.version}
-                      {" · "}
-                      <a
-                        className="link"
-                        href={updaterInfo?.release_page ?? "#"}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          if (updaterInfo) openExternal(updaterInfo.release_page).catch(() => {});
-                        }}
-                      >
-                        {t("settings.updateNotesLink")}
-                      </a>
-                    </>
-                  ) : (
-                    lastCheck.detail
-                  )}
+                  {lastCheck.available
+                    ? `${t("settings.updateFound")} v${lastCheck.version}`
+                    : lastCheck.detail}
                 </div>
               )}
-              {/* Human-facing link: opens the release page, not the JSON manifest. */}
+              {/* The single human-facing entry point. This row *is* "read the
+                  release notes" — a second link with that label pointed at the
+                  very same URL. The raw manifest URL is gone too: it is machine
+                  JSON the user cannot act on, and a failed check already names
+                  the endpoint in its message. */}
               <div className="setrow">
                 <span className="setrow-label">
                   <span className="icon"><IconInfo size={15} /></span>
@@ -1478,26 +1577,6 @@ const SettingsPanel = memo(function SettingsPanel({
                   </a>
                 ) : (
                   <span className="setrow-value">…</span>
-                )}
-              </div>
-              {/* The manifest URL is machine JSON, so it is shown as text (with a
-                  click-to-open for diagnostics) instead of being the main link. */}
-              <div className="setrow endpoint-row">
-                <span className="setrow-label">{t("settings.updateEndpoint")}</span>
-                {updaterInfo ? (
-                  <a
-                    className="endpoint-path"
-                    href={updaterInfo.endpoint}
-                    title={updaterInfo.endpoint}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      openExternal(updaterInfo.endpoint).catch(() => {});
-                    }}
-                  >
-                    {updaterInfo.endpoint}
-                  </a>
-                ) : (
-                  <span className="endpoint-path">…</span>
                 )}
               </div>
               <div className="setrow">

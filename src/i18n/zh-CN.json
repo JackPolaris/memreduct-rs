@@ -115,9 +115,7 @@
     "updateNever": "尚未检查",
     "updateFound": "发现新版本",
     "updatePage": "最新版本",
-    "updatePageOpen": "在浏览器中打开",
-    "updateNotesLink": "查看更新说明",
-    "updateEndpoint": "更新清单"
+    "updatePageOpen": "在浏览器中打开"
   },
   "regions": {
     "workingSet": "工作集",
