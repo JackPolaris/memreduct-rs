@@ -542,7 +542,7 @@ pub fn run() {
             tray: Mutex::new(None),
             hotkey: Mutex::new(None),
         })
-        .setup(|app| {
+        .setup(move |app| {
             // Create the tray icon and store it in state for background updates.
             if let Ok(tray) = tray::create_tray(app.handle()) {
                 *lock_or_recover(&app.state::<AppState>().tray) = Some(tray);
@@ -557,10 +557,27 @@ pub fn run() {
             let start_minimized = lock_config(&app.state::<AppState>()).start_minimized;
             let silent_launch = autostart::is_startup_launch();
             if let Some(window) = app.get_webview_window("main") {
-                if start_minimized || silent_launch {
+                // A hand-over (`-takeover`) is not a cold start: the user was
+                // looking at this window when they triggered the elevated
+                // cleanup, so the replacement must come back to the foreground
+                // even if "start minimized to tray" is configured — a hidden
+                // window here reads as "the app silently restarted". And after
+                // the UAC consent dialog the foreground lock belongs to
+                // whatever the user was working in, so `show()` alone would
+                // leave the window *behind* everything: force it up.
+                if takeover {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                    if let Ok(hwnd) = window.hwnd() {
+                        single_instance::force_foreground(hwnd.0 as isize);
+                    }
+                } else if start_minimized || silent_launch {
                     let _ = window.hide();
                 } else {
                     let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
                 }
             }
 

@@ -24,7 +24,8 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowTextLengthW, GetWindowThreadProcessId, IsWindowVisible,
-    SetForegroundWindow, ShowWindow, SW_RESTORE,
+    SetForegroundWindow, SetWindowPos, ShowWindow, HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOMOVE,
+    SWP_NOSIZE, SWP_SHOWWINDOW, SW_RESTORE,
 };
 
 /// Per-session mutex (`Local\`) so two users logged into the same machine do
@@ -214,6 +215,41 @@ fn process_image_path(pid: u32) -> Option<String> {
         // `len` excludes the terminating null.
         let len = (len as usize).min(buf.len());
         Some(String::from_utf16_lossy(&buf[..len]).to_lowercase())
+    }
+}
+
+/// Raise a window to the foreground, defeating Windows' foreground lock.
+///
+/// `hwnd_raw` is the raw `HWND` value, passed as an `isize` so this module does
+/// not have to agree with whichever `windows` crate version Tauri links (its
+/// `WebviewWindow::hwnd()` re-exports that crate's `HWND`).
+///
+/// Why this exists: a UAC-elevated relaunch cannot just call
+/// `SetForegroundWindow`. The consent dialog runs on the secure desktop, so the
+/// elevated child is *not* "started by the foreground process" in the way the
+/// foreground-lock rules require — by the time it shows its window the lock is
+/// held by whatever the user was working in, the call is rejected, and the
+/// freshly restarted app sits behind everything looking like it silently
+/// started to the tray.
+///
+/// The momentary topmost flip is the standard workaround: `SetWindowPos` is not
+/// subject to the foreground lock, and the follow-up `HWND_NOTOPMOST` leaves the
+/// window above everything else without the always-on-top side effect.
+pub fn force_foreground(hwnd_raw: isize) {
+    if hwnd_raw == 0 {
+        return;
+    }
+    // SAFETY: `hwnd_raw` is a live top-level window handle handed over by the
+    // caller (taken from Tauri's own window object moments earlier).
+    let hwnd = HWND(hwnd_raw as *mut core::ffi::c_void);
+    unsafe {
+        let _ = ShowWindow(hwnd, SW_RESTORE);
+        if SetForegroundWindow(hwnd).as_bool() {
+            return;
+        }
+        let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW;
+        let _ = SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, flags);
+        let _ = SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, flags);
     }
 }
 

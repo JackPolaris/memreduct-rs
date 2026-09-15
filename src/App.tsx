@@ -724,8 +724,17 @@ export default function App() {
     });
 
     const unlistenMemory = listen<MemoryInfo>("memory-update", (e) => {
+      // The window spends most of its life in the tray, and this 1 Hz event is
+      // the only thing still forcing the hidden webview to re-render there.
+      // Drop the sample while hidden and refetch the moment the window comes
+      // back, so the first visible frame is fresh instead of up to a second old.
+      if (document.hidden) return;
       setInfo(e.payload);
     });
+    const onVisibilityChange = () => {
+      if (!document.hidden) getMemoryInfo().then(setInfo).catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     const unlistenAuto = listen("autoclean-done", () => {
       getMemoryInfo().then(setInfo).catch(() => {});
     });
@@ -782,6 +791,7 @@ export default function App() {
 
     return () => {
       unlistenMemory.then((fn) => fn());
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       unlistenAuto.then((fn) => fn());
       unlistenSettings.then((fn) => fn());
       unlistenAbout.then((fn) => fn());

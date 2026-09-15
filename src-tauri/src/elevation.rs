@@ -141,7 +141,7 @@ pub fn relaunch_with_args(args: &str) -> bool {
 /// then exit); `false` when the user cancelled the UAC prompt.
 pub fn relaunch_self_as_admin() -> bool {
     use windows::Win32::UI::Shell::ShellExecuteW;
-    use windows::Win32::UI::WindowsAndMessaging::SW_SHOW;
+    use windows::Win32::UI::WindowsAndMessaging::{AllowSetForegroundWindow, ASFW_ANY, SW_SHOW};
 
     let Some(exe) = std::env::current_exe().ok() else {
         return false;
@@ -182,6 +182,18 @@ pub fn relaunch_self_as_admin() -> bool {
             .chain(core::iter::once(0))
             .collect::<Vec<u16>>()
     });
+
+    // Hand over the foreground: after the consent dialog the elevated child is
+    // spawned by the UAC service rather than by this process, so it fails the
+    // foreground-lock rule "started by the foreground process" and its window
+    // would come up *behind* whatever the user was doing. Granting `ASFW_ANY`
+    // (allowed because *this* process owns the foreground right now — the user
+    // just clicked in its window) lets the child win the lock. The child still
+    // enforces it itself (`single_instance::force_foreground`) for the case
+    // where the grant has already lapsed by the time it shows its window.
+    unsafe {
+        let _ = AllowSetForegroundWindow(ASFW_ANY);
+    }
 
     unsafe {
         let result = ShellExecuteW(

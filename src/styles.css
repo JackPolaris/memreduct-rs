@@ -404,12 +404,6 @@ body {
 .statuschip.elevated { color: var(--accent); }
 .statuschip.elevated .dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
-.statusbar-note {
-  margin-left: auto;
-  font-size: 10.5px;
-  color: var(--muted);
-}
-
 /* ===== Hero ===== */
 .hero {
   display: flex;
@@ -528,7 +522,12 @@ body {
 
 .gauge-head-dot {
   position: absolute;
-  top: 0;
+  /* The dot is the rounded cap of the arc, so it must sit on the *centreline*
+     of the ring band, not on the outer rim: gauge 124 / inner 96 puts the band
+     between r=48 and r=62, centreline r=55 — i.e. 7px inside the edge this
+     layer's box gives. Centered on the rim (the previous value) half the dot
+     floated outside the band, which read as a misaligned bubble. */
+  top: 7px;
   left: 50%;
   width: 9px;
   height: 9px;
@@ -2913,6 +2912,9 @@ input[type="color"] {
 }
 
 .app[data-ui="minimal"] .gauge-head-dot {
+  /* Minimal's ring is a thin 6px band (gauge 124 / inner 112): centreline r=59,
+     so 3px inside the outer rim — see the base rule for the reasoning. */
+  top: 3px;
   width: 6px;
   height: 6px;
   margin: -3px 0 0 -3px;
