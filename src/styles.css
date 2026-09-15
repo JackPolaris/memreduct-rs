@@ -322,7 +322,7 @@ body {
 .view {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .view[hidden] {
@@ -416,9 +416,9 @@ body {
   gap: 12px;
   align-items: stretch;
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 12px;
   flex: 1;
-  min-height: 136px;
+  min-height: 116px;
 }
 
 .gauge-wrap {
@@ -442,8 +442,8 @@ body {
 }
 
 .gauge {
-  width: 136px;
-  height: 136px;
+  width: 124px;
+  height: 124px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -499,7 +499,7 @@ body {
    transform-free, static, and reads as instrument detailing. */
 .gauge-ticks {
   position: absolute;
-  inset: -14px;
+  inset: -12px;
   border-radius: 50%;
   pointer-events: none;
   background: repeating-conic-gradient(
@@ -541,8 +541,8 @@ body {
 }
 
 .gauge-inner {
-  width: 106px;
-  height: 106px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   /* A shallow radial gradient instead of a flat fill: the centre catches the
      light, which is what makes a dial look convex. */
@@ -590,7 +590,7 @@ body {
 }
 
 .gauge-value {
-  font-size: 29px;
+  font-size: 27px;
   font-weight: 800;
   line-height: 1;
   letter-spacing: -1px;
@@ -619,7 +619,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 7px 11px;
   border-radius: var(--radius-sm);
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -759,14 +759,14 @@ body {
 .region-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 5px;
+  gap: 4px;
 }
 
 .region {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 9px;
+  padding: 5px 8px;
   border-radius: 9px;
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -846,9 +846,15 @@ body {
   stroke-dashoffset: 0;
 }
 
+/* Selected: the tint is mixed over the same surface the idle card uses (not
+   the page background), so the two states read as on/off rather than
+   "transparent vs painted" — and the stronger border does the real work of
+   separating them at a glance. */
 .region.on {
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface2));
+  border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+  box-shadow: inset 0 1px 0 0 var(--rim), inset 0 0 0 0.5px
+    color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .region-body {
@@ -860,9 +866,13 @@ body {
   min-width: 0;
 }
 
+/* Caveat ("may cause stutter", "needs Windows 10+"): full-saturation amber on a
+   green-tinted card is the loudest thing on the screen and there are five of
+   them, so the hue is pulled towards the muted grey — it still reads as a
+   caution, without turning the grid into confetti. */
 .region-note {
-  font-size: 10.5px;
-  color: var(--warning);
+  font-size: 10px;
+  color: color-mix(in srgb, var(--warning) 58%, var(--muted));
 }
 
 /* Non-warning note (e.g. "not supported on this system"). */
@@ -873,7 +883,7 @@ body {
 .region-actions {
   display: flex;
   gap: 7px;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .region-actions .chipbtn {
@@ -883,13 +893,33 @@ body {
 }
 
 /* ===== Clean button ===== */
+
+/* Sticky dock: the Clean button is the one control the app exists for, and at
+   the default 400x700 window the region grid alone already overflows — without
+   the dock it sits below the fold on launch. The dock is frosted rather than
+   opaque so cards scrolling underneath stay hinted at, and it works unchanged
+   on every skin because it blurs whatever the page paints behind it. */
+.clean-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin: 0 -6px;
+  padding: 8px 6px 2px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-solid) 42%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: 0 -10px 20px -14px rgba(0, 0, 0, 0.3);
+}
+
 .clean-btn {
   border: none;
+  width: 100%;
   background: var(--accent-grad);
   color: #fff;
   font-size: 14.5px;
   font-weight: 700;
-  padding: 12px;
+  padding: 11px;
   border-radius: var(--radius-sm);
   box-shadow: 0 10px 24px var(--accent-glow);
   cursor: pointer;
@@ -2862,8 +2892,8 @@ input[type="color"] {
 
 /* A thin, precise ring: the band is the gap between `.gauge` and `.gauge-inner`. */
 .app[data-ui="minimal"] .gauge {
-  width: 128px;
-  height: 128px;
+  width: 124px;
+  height: 124px;
   background: conic-gradient(
     from 0deg,
     var(--gauge-color) 0 calc(var(--gauge-pct) * 1%),
@@ -2873,8 +2903,8 @@ input[type="color"] {
 }
 
 .app[data-ui="minimal"] .gauge-inner {
-  width: 118px;
-  height: 118px;
+  width: 112px;
+  height: 112px;
   /* Opaque on purpose: with a transparent centre the whole conic gradient would
      show through and the "thin ring" would be a filled disc. */
   background: var(--surface);
@@ -2891,7 +2921,7 @@ input[type="color"] {
 }
 
 .app[data-ui="minimal"] .gauge-value {
-  font-size: 31px;
+  font-size: 29px;
   font-weight: 600;
   letter-spacing: -1.6px;
 }

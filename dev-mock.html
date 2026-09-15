@@ -96,6 +96,9 @@
         // Exposed for the `?diag=1` report, so a screenshot can show what the
         // stub actually served and what the app saved back.
         window.__mockConfig = config;
+        // `?mask=0x03` overrides the selected regions, so the *unselected* card
+        // state (which the default 0xff never shows) can be screenshotted.
+        if (params.get("mask")) config.reduct_mask = Number(params.get("mask"));
 
         const manifestUrl =
           "https://github.com/JackPolaris/memreduct-rs/releases/latest/download/update-x86_64-pc-windows-msvc.json";

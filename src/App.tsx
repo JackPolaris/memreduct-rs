@@ -1167,17 +1167,23 @@ export default function App() {
                 memory pressure is elevated the Clean button gets a sweep that
                 travels around it, tinted with the same colour the tray icon
                 would use. Render-time only — transform animation, so it stays on
-                the compositor and the CPU cost is negligible. */}
-            <button
-              className={`clean-btn ${pressure === "ok" ? "" : "attention"}`}
-              style={{ "--ring-color": pressureColor(physPct, warnLevel, dangerLevel) } as React.CSSProperties}
-              onClick={handleClean}
-              disabled={cleaning}
-            >
-              {pressure !== "ok" && <span className="press-ring" aria-hidden="true" />}
-              {cleaning ? null : <IconBolt size={20} />}
-              {cleaning ? t("main.cleaning") : t("main.cleanMemory")}
-            </button>
+                the compositor and the CPU cost is negligible.
+
+                The dock is `position: sticky`: at the default 400x700 window the
+                region grid alone overflows, and the one control this app exists
+                for must not be the thing the user has to scroll to find. */}
+            <div className="clean-dock">
+              <button
+                className={`clean-btn ${pressure === "ok" ? "" : "attention"}`}
+                style={{ "--ring-color": pressureColor(physPct, warnLevel, dangerLevel) } as React.CSSProperties}
+                onClick={handleClean}
+                disabled={cleaning}
+              >
+                {pressure !== "ok" && <span className="press-ring" aria-hidden="true" />}
+                {cleaning ? null : <IconBolt size={20} />}
+                {cleaning ? t("main.cleaning") : t("main.cleanMemory")}
+              </button>
+            </div>
           </>
         </div>
         <div
