@@ -110,8 +110,10 @@
     "updateCheckFailed": "失敗",
     "updateNever": "未確認",
     "updateFound": "新しいバージョンがあります",
-    "updateEndpoint": "更新URL",
-    "updateEndpointOpen": "ブラウザーで開く"
+    "updatePage": "最新リリース",
+    "updatePageOpen": "ブラウザーで開く",
+    "updateNotesLink": "リリースノート",
+    "updateEndpoint": "更新マニフェスト"
   },
   "regions": {
     "workingSet": "ワーキングセット",

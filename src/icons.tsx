@@ -133,3 +133,14 @@ export function IconInfo({ size, className }: IconProps) {
     </svg>
   );
 }
+
+/** Downward arrow into a tray — used by the "update available" banner. */
+export function IconDownload({ size, className }: IconProps) {
+  return (
+    <svg {...base(size)} className={className}>
+      <path d="M12 3v11" />
+      <path d="M7.5 9.5L12 14l4.5-4.5" />
+      <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+    </svg>
+  );
+}

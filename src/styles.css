@@ -138,6 +138,28 @@ body {
   letter-spacing: 0.2px;
 }
 
+/* Sheen sweeping across the brand text — a CSS-only equivalent of React Bits'
+   `ShinyText`. Deliberately finite (a few passes, then it rests): a system
+   utility should not keep repainting forever. */
+.shiny-text {
+  background-image: linear-gradient(
+    100deg,
+    var(--text) 42%,
+    color-mix(in srgb, var(--accent) 80%, #fff) 50%,
+    var(--text) 58%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shiny-sweep 7s linear 4;
+}
+
+@keyframes shiny-sweep {
+  from { background-position: 180% 0; }
+  to { background-position: -80% 0; }
+}
+
 .tabs {
   display: flex;
   gap: 4px;
@@ -257,6 +279,16 @@ body {
   flex-shrink: 0;
 }
 
+/* Registering the property lets the sweep be *transitioned*: without this the
+   ring would jump once per second instead of gliding. Browsers without
+   `@property` still render the correct end state (custom properties fall back to
+   plain token substitution), they just lose the tween. */
+@property --gauge-pct {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
 .gauge {
   width: 136px;
   height: 136px;
@@ -264,6 +296,13 @@ body {
   display: grid;
   place-items: center;
   position: relative;
+  --gauge-pct: 0;
+  --gauge-color: var(--accent);
+  background: conic-gradient(
+    var(--gauge-color) calc(var(--gauge-pct) * 1%),
+    var(--ring-bg) 0
+  );
+  transition: --gauge-pct 600ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .gauge::before {
@@ -818,6 +857,29 @@ body {
   color: var(--danger);
 }
 
+/* Manifest URL row: the value is long and must wrap instead of stretching the
+   panel, so the row stacks and the value breaks anywhere. */
+.endpoint-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+}
+
+.endpoint-path {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  word-break: break-all;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.endpoint-path:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .link {
   color: var(--accent);
   text-decoration: none;
@@ -948,6 +1010,8 @@ input[type="color"] {
   background: var(--surface-solid);
   color: var(--text);
   flex-shrink: 0;
+  /* `body` turns selection off globally; an editable field must opt back in. */
+  user-select: text;
 }
 
 .hint {
@@ -1085,6 +1149,115 @@ input[type="color"] {
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* ===== Toast ===== */
+/* ===== Update banner =====
+   Inline between the header and the content — deliberately NOT a fixed overlay.
+   At the default 400 px window width a sticky toast sat on top of the brand and
+   tab header, so the user could not switch tabs until the update was dealt with. */
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 14px 8px;
+  padding: 9px 8px 9px 12px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 14%, var(--surface-solid)),
+    color-mix(in srgb, var(--accent) 7%, var(--surface-solid))
+  );
+  border: 1px solid var(--accent-glow);
+  box-shadow: 0 4px 16px var(--accent-soft);
+  animation: bannerIn 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.update-banner-icon {
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.update-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.update-banner-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.update-banner-version {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* Single line: the banner must not grow taller than the tab bar it sits under. */
+.update-banner-note {
+  margin-top: 1px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update-banner-btn {
+  flex-shrink: 0;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+
+.update-banner-btn:hover {
+  filter: brightness(1.07);
+}
+
+.update-banner-btn:active {
+  transform: scale(0.97);
+}
+
+.update-banner-close {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.update-banner-close:hover {
+  background: rgba(127, 127, 127, 0.18);
+  color: var(--text);
+}
+
+@keyframes bannerIn {
+  from { transform: translateY(-8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 .toasts {
   position: fixed;
   top: 14px;
@@ -1142,22 +1315,8 @@ input[type="color"] {
   white-space: nowrap;
 }
 
-.toast-action {
-  margin-left: 4px;
-  border: none;
-  background: var(--accent);
-  color: #fff;
-  padding: 5px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.toast-action:hover {
-  filter: brightness(1.06);
-}
+/* `.toast-action` was removed with the update pill: the "install now" button now
+   lives in `.update-banner-btn`. */
 
 .toast-progress {
   width: 90px;
@@ -1217,4 +1376,51 @@ input[type="color"] {
 
 @keyframes spinnerRotate {
   to { transform: rotate(360deg); }
+}
+
+/* ===== Entrance stagger =====
+   Cards rise in once, on mount only — the elements are stable across the 1 Hz
+   data updates, so the animation never replays. */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.metric,
+.region {
+  animation: rise-in 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.region-grid .region:nth-child(1) { animation-delay: 0ms; }
+.region-grid .region:nth-child(2) { animation-delay: 35ms; }
+.region-grid .region:nth-child(3) { animation-delay: 70ms; }
+.region-grid .region:nth-child(4) { animation-delay: 105ms; }
+.region-grid .region:nth-child(5) { animation-delay: 140ms; }
+.region-grid .region:nth-child(6) { animation-delay: 175ms; }
+.region-grid .region:nth-child(7) { animation-delay: 210ms; }
+.region-grid .region:nth-child(8) { animation-delay: 245ms; }
+.metrics .metric:nth-child(1) { animation-delay: 30ms; }
+.metrics .metric:nth-child(2) { animation-delay: 90ms; }
+.metrics .metric:nth-child(3) { animation-delay: 150ms; }
+
+/* Spark overlay for primary actions: fixed, and never intercepts input. */
+.click-spark {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 300;
+}
+
+/* ===== Accessibility: honour "reduce motion" =====
+   Covers the CSS animations above as well as the existing transitions; the JS
+   animations (gauge tween, spark) check the same media query themselves. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

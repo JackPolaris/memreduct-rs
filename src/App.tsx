@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import i18n from "./i18n";
@@ -40,6 +40,7 @@ import {
   IconBolt,
   IconCache,
   IconChip,
+  IconDownload,
   IconDrive,
   IconGauge,
   IconInfo,
@@ -53,10 +54,16 @@ import {
 
 type Tab = "main" | "settings";
 
-type ToastKind = "info" | "success" | "update" | "progress";
+type ToastKind = "info" | "success" | "progress";
 
-/** Stable id for the single "update available" pill (dedup across sources). */
-const UPDATE_PROMPT_ID = 900000001;
+/**
+ * Id base for the download-progress toast, kept clear of ordinary toast ids.
+ *
+ * (The "update available" prompt is no longer a toast at all — see
+ * `availableUpdate` in the component: a sticky overlay sat on top of the header
+ * and made the tab switcher unreachable.)
+ */
+const TOAST_PROGRESS_ID_BASE = 500000000;
 
 interface Toast {
   id: number;
@@ -122,6 +129,165 @@ function notesFirstLine(notes: string): string {
   return line.replace(/^[-*]\s*/, "").trim();
 }
 
+/** Respect the OS "reduce motion" accessibility setting. */
+function usePrefersReducedMotion(): boolean {
+  const [reduce, setReduce] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (!mq) return;
+    const onChange = (e: MediaQueryListEvent) => setReduce(e.matches);
+    setReduce(mq.matches);
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+  return reduce;
+}
+
+/**
+ * Smoothly move a percentage towards `value` by writing to the DOM directly.
+ *
+ * Deliberately *not* React state: the sample arrives once per second and a
+ * state-driven tween would re-render the whole tree ~60×/s, which is the wrong
+ * trade for a memory tool. Attach the returned ref to an element rendered empty
+ * — the effect fills in the text (including the first paint).
+ */
+function usePercentTween(value: number, reduceMotion: boolean) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const shown = useRef(value);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const write = (v: number) => {
+      el.textContent = `${v}%`;
+    };
+    const from = shown.current;
+    if (reduceMotion || from === value) {
+      shown.current = value;
+      write(value);
+      return;
+    }
+    let raf = 0;
+    const started = performance.now();
+    const tick = (now: number) => {
+      // Clamp: an rAF timestamp is the *frame's* start time and can be earlier
+      // than the `performance.now()` captured here, which would make `t` negative
+      // and send the eased value off in the opposite direction — the number ran
+      // away to values like -23830% before this guard.
+      const t = Math.min(1, Math.max(0, (now - started) / 600));
+      const eased = 1 - Math.pow(1 - t, 3);
+      const v = Math.round(from + (value - from) * eased);
+      shown.current = v;
+      write(v);
+      if (t < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        shown.current = value;
+        write(value);
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, reduceMotion]);
+
+  return ref;
+}
+
+/**
+ * Spark burst from the click point — a dependency-free take on React Bits'
+ * `ClickSpark`.
+ *
+ * Fires only for the primary actions matching `selector`, not on every click:
+ * spraying particles whenever a checkbox is toggled would be noise in a system
+ * utility. Rendered as a fixed, non-interactive canvas so it never intercepts
+ * input.
+ */
+function ClickSpark({
+  selector,
+  color,
+  enabled,
+}: {
+  selector: string;
+  color: string;
+  enabled: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const sizeToWindow = () => {
+      canvas.width = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
+      canvas.style.width = `${window.innerWidth}px`;
+      canvas.style.height = `${window.innerHeight}px`;
+    };
+    const clear = () => {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    };
+    sizeToWindow();
+    clear();
+
+    if (!enabled) return;
+
+    const LIFE = 420;
+    let sparks: { x: number; y: number; angle: number; start: number }[] = [];
+    let raf = 0;
+
+    const frame = (now: number) => {
+      clear();
+      sparks = sparks.filter((s) => now - s.start < LIFE);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      for (const s of sparks) {
+        const p = (now - s.start) / LIFE;
+        const distance = 3 + 20 * p;
+        const cx = s.x + Math.cos(s.angle) * distance;
+        const cy = s.y + Math.sin(s.angle) * distance;
+        const len = 5 + 9 * (1 - p);
+        ctx.globalAlpha = 1 - p;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(s.angle) * len, cy + Math.sin(s.angle) * len);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      raf = sparks.length ? requestAnimationFrame(frame) : 0;
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (!target?.closest?.(selector)) return;
+      for (let i = 0; i < 9; i++) {
+        sparks.push({
+          x: e.clientX,
+          y: e.clientY,
+          angle: (Math.PI * 2 * i) / 9,
+          start: performance.now(),
+        });
+      }
+      if (!raf) raf = requestAnimationFrame(frame);
+    };
+
+    window.addEventListener("resize", sizeToWindow);
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      window.removeEventListener("resize", sizeToWindow);
+      window.removeEventListener("pointerdown", onPointerDown);
+      if (raf) cancelAnimationFrame(raf);
+      clear();
+    };
+  }, [selector, color, enabled]);
+
+  return <canvas ref={canvasRef} className="click-spark" aria-hidden="true" />;
+}
+
 /**
  * One-line summary of a cleanup result, shared by the manual path and the
  * `clean-done` events so both report identically.
@@ -161,6 +327,8 @@ export default function App() {
   const [updaterInfo, setUpdaterInfo] = useState<UpdaterInfo | null>(null);
   /** Outcome of the most recent update check, for the About page. */
   const [lastCheck, setLastCheck] = useState<CheckOutcome | null>(null);
+  /** An announced update waiting for the user's decision (renders the banner). */
+  const [availableUpdate, setAvailableUpdate] = useState<UpdateInfo | null>(null);
   const progressToastId = useRef<number | null>(null);
   /** Monotonic id source: `Date.now()` alone collides when two toasts are
    *  pushed within the same millisecond. */
@@ -186,6 +354,8 @@ export default function App() {
     () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false
   );
   const [resolvedDark, setResolvedDark] = useState<boolean>(false);
+  /** All decorative motion is skipped when the OS asks for reduced motion. */
+  const reduceMotion = usePrefersReducedMotion();
 
   useEffect(() => {
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -234,52 +404,95 @@ export default function App() {
     };
   }, [pushTrayLabels]);
 
-  // Single update-prompt toast id — pushing an update prompt again replaces it.
-  const dismissToast = (id: number) => {
+  // Every callback that the (memoised) settings panel receives must keep a
+  // stable identity, otherwise `React.memo` is defeated and the whole panel —
+  // dozens of rows plus its own effects — is reconciled on every 1 Hz memory
+  // update even while it is hidden behind `display: none`.
+  const dismissToast = useCallback((id: number) => {
     if (progressToastId.current === id) progressToastId.current = null;
     setToasts((ts) => ts.filter((t) => t.id !== id));
-  };
+  }, []);
 
-  const pushToast = (
-    title: string,
-    body: string,
-    kind: ToastKind = "info",
-    opts?: { progress?: number; progressTotal?: number; action?: () => void; stickyId?: number }
-  ) => {
-    toastIdSeq.current += 1;
-    const id = opts?.stickyId ?? toastIdSeq.current;
-    if (opts?.stickyId !== undefined) {
-      // Upsert: if a toast with this sticky id exists, update it in place;
-      // otherwise create it. (A pure "update existing" silently drops the first
-      // push, which is why the update prompt never showed on a cold state.)
-      setToasts((ts) => {
-        if (ts.some((t) => t.id === opts?.stickyId)) {
-          return ts.map((t) =>
-            t.id === opts?.stickyId
-              ? { ...t, title, body, progress: opts?.progress, progressTotal: opts?.progressTotal, action: opts?.action }
-              : t
-          );
-        }
-        return [...ts, { id, title, body, kind, progress: opts?.progress, progressTotal: opts?.progressTotal, action: opts?.action }];
-      });
+  const pushToast = useCallback(
+    (
+      title: string,
+      body: string,
+      kind: ToastKind = "info",
+      opts?: {
+        progress?: number;
+        progressTotal?: number;
+        action?: () => void;
+        stickyId?: number;
+      }
+    ) => {
+      toastIdSeq.current += 1;
+      const id = opts?.stickyId ?? toastIdSeq.current;
+      if (opts?.stickyId !== undefined) {
+        // Upsert: if a toast with this sticky id exists, update it in place;
+        // otherwise create it. (A pure "update existing" silently drops the first
+        // push, which is why the update prompt never showed on a cold state.)
+        setToasts((ts) => {
+          if (ts.some((t) => t.id === opts.stickyId)) {
+            return ts.map((t) =>
+              t.id === opts.stickyId
+                ? {
+                    ...t,
+                    title,
+                    body,
+                    progress: opts.progress,
+                    progressTotal: opts.progressTotal,
+                    action: opts.action,
+                  }
+                : t
+            );
+          }
+          return [
+            ...ts,
+            {
+              id,
+              title,
+              body,
+              kind,
+              progress: opts.progress,
+              progressTotal: opts.progressTotal,
+              action: opts.action,
+            },
+          ];
+        });
+        return id;
+      }
+      setToasts((ts) => [
+        ...ts,
+        {
+          id,
+          title,
+          body,
+          kind,
+          progress: opts?.progress,
+          progressTotal: opts?.progressTotal,
+          action: opts?.action,
+        },
+      ]);
+      if (kind !== "progress") {
+        const timer = window.setTimeout(() => {
+          toastTimers.current = toastTimers.current.filter((t) => t !== timer);
+          setToasts((ts) => ts.filter((t) => t.id !== id));
+        }, 4200);
+        toastTimers.current.push(timer);
+      }
       return id;
-    }
-    setToasts((ts) => [...ts, { id, title, body, kind, progress: opts?.progress, progressTotal: opts?.progressTotal, action: opts?.action }]);
-    if (kind !== "update" && kind !== "progress") {
-      const timer = window.setTimeout(() => {
-        toastTimers.current = toastTimers.current.filter((t) => t !== timer);
-        setToasts((ts) => ts.filter((t) => t.id !== id));
-      }, 4200);
-      toastTimers.current.push(timer);
-    }
-    return id;
-  };
+    },
+    []
+  );
 
   // Download & install with a live progress toast (fixed sticky id).
-  const startUpdateInstall = async () => {
-    // Dismiss any pending update prompt first (single update flow).
-    setToasts((ts) => ts.filter((t) => t.kind !== "update"));
-    const stickyId = Date.now() + 1000000; // stable id for the progress toast
+  const startUpdateInstall = useCallback(async () => {
+    // The banner has done its job; the progress toast takes over.
+    setAvailableUpdate(null);
+    // A dedicated id range keeps progress toasts from colliding with the
+    // monotonic counter used by ordinary toasts.
+    toastIdSeq.current += 1;
+    const stickyId = TOAST_PROGRESS_ID_BASE + toastIdSeq.current;
     progressToastId.current = stickyId;
     // `i18n.t` rather than the hook's `t`: this function is captured by the
     // mount-time update prompt, so a bound `t` would freeze the language at
@@ -297,28 +510,25 @@ export default function App() {
       dismissToast(stickyId);
       pushToast(i18n.t("settings.updateError"), String(e), "info");
     }
-  };
+  }, [pushToast, dismissToast]);
 
   /**
-   * Show the one-line "new version" prompt.
+   * Show the "new version" banner.
    *
-   * The pill is single-line, so the full release notes cannot go here; the first
-   * bullet is included to say what the update is about.
+   * Rendered inline above the content instead of as a toast: the prompt is
+   * sticky, and a fixed overlay at the top of a 400 px window sat on top of the
+   * brand/tab header, leaving the user unable to switch tabs until they dealt
+   * with it. Only the first release-notes bullet fits on one line, which is
+   * enough to say *what* the update is about.
    */
-  const showUpdatePrompt = (info: UpdateInfo) => {
-    const note = notesFirstLine(info.body);
-    pushToast(
-      i18n.t("settings.updateAvailable"),
-      note ? `v${info.version} · ${note}` : `v${info.version}`,
-      "update",
-      { stickyId: UPDATE_PROMPT_ID, action: () => startUpdateInstall() }
-    );
-  };
+  const showUpdatePrompt = useCallback((info: UpdateInfo) => {
+    setAvailableUpdate(info);
+  }, []);
 
   /** Remember what the last check did, so the About page can report it. */
-  const recordCheck = (outcome: Omit<CheckOutcome, "at">) => {
+  const recordCheck = useCallback((outcome: Omit<CheckOutcome, "at">) => {
     setLastCheck({ ...outcome, at: new Date().toLocaleTimeString() });
-  };
+  }, []);
 
   useEffect(() => {
     tRef.current = t;
@@ -491,18 +701,21 @@ export default function App() {
     saveConfig(next).catch((e) => pushToast(i18n.t("settings.saveFailed"), String(e), "info"));
   };
 
-  const saveConfigAndReload = async (next: Config) => {
-    // The settings panel never edits the region mask, so always carry the
-    // freshest one over instead of round-tripping whatever the draft holds.
-    const merged: Config = { ...next, reduct_mask: maskRef.current };
-    setConfig(merged);
-    setSelectedMask(maskRef.current);
-    try {
-      await saveConfig(merged);
-    } catch (e) {
-      pushToast(i18n.t("settings.saveFailed"), String(e), "info");
-    }
-  };
+  const saveConfigAndReload = useCallback(
+    async (next: Config) => {
+      // The settings panel never edits the region mask, so always carry the
+      // freshest one over instead of round-tripping whatever the draft holds.
+      const merged: Config = { ...next, reduct_mask: maskRef.current };
+      setConfig(merged);
+      setSelectedMask(maskRef.current);
+      try {
+        await saveConfig(merged);
+      } catch (e) {
+        pushToast(i18n.t("settings.saveFailed"), String(e), "info");
+      }
+    },
+    [pushToast]
+  );
 
   const toggleRegion = (bit: number) => {
     applyMask(selectedMask & bit ? selectedMask & ~bit : selectedMask | bit, true);
@@ -530,6 +743,8 @@ export default function App() {
     (r) => selectedMask & r.bit && isRegionSupported(r, osInfo)
   ).length;
   const supportedCount = REGIONS.filter((r) => isRegionSupported(r, osInfo)).length;
+  // The ring number is written by a rAF loop instead of React (see the hook).
+  const gaugeRef = usePercentTween(physPct, reduceMotion);
   return (
     <div className={`app ${resolvedDark ? "dark" : ""}`}>
       <header className="topbar">
@@ -537,7 +752,7 @@ export default function App() {
           <div className="brand-mark">
             <IconBolt size={18} />
           </div>
-          <span className="brand-name">{t("app.name")}</span>
+          <span className="brand-name shiny-text">{t("app.name")}</span>
         </div>
         <nav className="tabs">
           <button
@@ -556,6 +771,36 @@ export default function App() {
           </button>
         </nav>
       </header>
+
+      {availableUpdate && (
+        <div className="update-banner" role="status">
+          <span className="update-banner-icon">
+            <IconDownload size={15} />
+          </span>
+          <div className="update-banner-text">
+            <div className="update-banner-title">
+              {t("settings.updateAvailable")}
+              <span className="update-banner-version">v{availableUpdate.version}</span>
+            </div>
+            {notesFirstLine(availableUpdate.body) && (
+              <div className="update-banner-note" title={availableUpdate.body}>
+                {notesFirstLine(availableUpdate.body)}
+              </div>
+            )}
+          </div>
+          <button className="update-banner-btn" onClick={() => void startUpdateInstall()}>
+            {t("settings.installNow")}
+          </button>
+          <button
+            className="update-banner-close"
+            title={t("settings.dismiss")}
+            aria-label={t("settings.dismiss")}
+            onClick={() => setAvailableUpdate(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <main className="content">
         <div style={{ display: tab === "main" ? "flex" : "none" , flexDirection: "column", gap: 14 }}>
@@ -580,12 +825,20 @@ export default function App() {
               <div className="gauge-wrap">
                 <div
                   className="gauge"
-                  style={{
-                    background: `conic-gradient(${pressureColor(physPct, warnLevel, dangerLevel)} ${physPct}%, var(--ring-bg) ${physPct}% 100%)`,
-                  }}
+                  style={
+                    {
+                      // The ring is driven by a registered custom property so the
+                      // sweep can be transitioned in CSS instead of jumping once
+                      // per second.
+                      "--gauge-pct": physPct,
+                      "--gauge-color": pressureColor(physPct, warnLevel, dangerLevel),
+                    } as React.CSSProperties
+                  }
                 >
                   <div className="gauge-inner">
-                    <div className="gauge-value">{physPct}%</div>
+                    {/* Filled by usePercentTween through the DOM; rendering the
+                        value here as well would fight the animation. */}
+                    <div className="gauge-value" ref={gaugeRef} />
                     <div className="gauge-label">{t("main.memoryUsed")}</div>
                     <div className="gauge-sub">
                       {info ? formatBytes(info.physical_memory.used_bytes) : "—"}
@@ -701,6 +954,7 @@ export default function App() {
             <div className="modal-actions">
               <button
                 className="btn-primary"
+                autoFocus
                 onClick={() => {
                   setConfirmMask(null);
                   runClean(confirmMask);
@@ -716,23 +970,13 @@ export default function App() {
         </div>
       )}
 
-      <div className="toasts">
+      {/* Screen readers announce toasts through a polite live region. */}
+      <div className="toasts" role="status" aria-live="polite">
         {toasts.map((toast) => (
           <div key={toast.id} className={`toast ${toast.kind}`}>
             <span className="toast-title">{toast.title}</span>
             <span className="toast-dot">·</span>
             <span className="toast-body">{toast.body}</span>
-            {toast.kind === "update" && toast.action && (
-              <button
-                className="toast-action"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toast.action?.();
-                }}
-              >
-                {t("settings.installNow")}
-              </button>
-            )}
             {toast.kind === "progress" && (
               <span className="toast-progress">
                 <span
@@ -744,6 +988,7 @@ export default function App() {
             <button
               className="toast-close"
               title={t("settings.dismiss")}
+              aria-label={t("settings.dismiss")}
               onClick={(e) => {
                 e.stopPropagation();
                 dismissToast(toast.id);
@@ -754,6 +999,14 @@ export default function App() {
           </div>
         ))}
       </div>
+
+      {/* Decorative spark burst on the primary actions; disabled when the OS asks
+          for reduced motion. */}
+      <ClickSpark
+        selector=".clean-btn, .btn-primary, .update-banner-btn"
+        color={accentByKey(config?.accent_color ?? "green").primary}
+        enabled={!reduceMotion}
+      />
     </div>
   );
 }
@@ -847,7 +1100,16 @@ function RegionCard({
 
 type Section = "general" | "memory" | "appearance" | "tray" | "about";
 
-function SettingsPanel({
+/**
+ * Settings panel.
+ *
+ * Memoised, together with the `useCallback`s the parent passes in: the backend
+ * pushes a memory sample every second and the panel is kept mounted behind
+ * `display: none`, so without this it would reconcile its (large) tree 60 times
+ * per minute for nothing. It still re-renders on language change, because `t`
+ * changes identity then.
+ */
+const SettingsPanel = memo(function SettingsPanel({
   config,
   t,
   onSave,
@@ -1177,32 +1439,65 @@ function SettingsPanel({
               </div>
               {lastCheck && (
                 <div className={`hint update-detail ${lastCheck.ok ? "" : "bad"}`}>
-                  {lastCheck.available
-                    ? `${t("settings.updateFound")} v${lastCheck.version}`
-                    : lastCheck.detail}
+                  {lastCheck.available ? (
+                    <>
+                      {t("settings.updateFound")} v{lastCheck.version}
+                      {" · "}
+                      <a
+                        className="link"
+                        href={updaterInfo?.release_page ?? "#"}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (updaterInfo) openExternal(updaterInfo.release_page).catch(() => {});
+                        }}
+                      >
+                        {t("settings.updateNotesLink")}
+                      </a>
+                    </>
+                  ) : (
+                    lastCheck.detail
+                  )}
                 </div>
               )}
+              {/* Human-facing link: opens the release page, not the JSON manifest. */}
               <div className="setrow">
                 <span className="setrow-label">
                   <span className="icon"><IconInfo size={15} /></span>
-                  {t("settings.updateEndpoint")}
+                  {t("settings.updatePage")}
                 </span>
                 {updaterInfo ? (
                   <a
                     className="link"
+                    href={updaterInfo.release_page}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openExternal(updaterInfo.release_page).catch(() => {});
+                    }}
+                  >
+                    {t("settings.updatePageOpen")}
+                  </a>
+                ) : (
+                  <span className="setrow-value">…</span>
+                )}
+              </div>
+              {/* The manifest URL is machine JSON, so it is shown as text (with a
+                  click-to-open for diagnostics) instead of being the main link. */}
+              <div className="setrow endpoint-row">
+                <span className="setrow-label">{t("settings.updateEndpoint")}</span>
+                {updaterInfo ? (
+                  <a
+                    className="endpoint-path"
                     href={updaterInfo.endpoint}
                     title={updaterInfo.endpoint}
                     onClick={(e) => {
                       e.preventDefault();
-                      // Opening it in a browser is the quickest way to confirm
-                      // whether the endpoint is reachable at all.
                       openExternal(updaterInfo.endpoint).catch(() => {});
                     }}
                   >
-                    {t("settings.updateEndpointOpen")}
+                    {updaterInfo.endpoint}
                   </a>
                 ) : (
-                  <span className="setrow-value">…</span>
+                  <span className="endpoint-path">…</span>
                 )}
               </div>
               <div className="setrow">
@@ -1238,7 +1533,7 @@ function SettingsPanel({
       </div>
     </div>
   );
-}
+});
 
 function Toggle({
   label,
@@ -1290,6 +1585,7 @@ function Slider({
         min={min}
         max={max}
         value={value}
+        aria-label={label}
         onChange={(e) => onChange(Number(e.target.value))}
       />
     </div>
@@ -1310,7 +1606,7 @@ function Select({
   return (
     <div className="setrow">
       <span className="setrow-label">{label}</span>
-      <select value={value} onChange={(e) => onChange(Number(e.target.value))}>
+      <select value={value} aria-label={label} onChange={(e) => onChange(Number(e.target.value))}>
         {options.map(([v, l]) => (
           <option key={v} value={v}>
             {l}
@@ -1321,6 +1617,14 @@ function Select({
   );
 }
 
+/**
+ * Colour picker row.
+ *
+ * The hex field used to be `readOnly`, so the only way to enter a colour was the
+ * OS picker. It now accepts typing — committing on blur/Enter and reverting on
+ * anything that is not a valid `#rrggbb` — while staying in sync when the value
+ * changes from elsewhere.
+ */
 function ColorRow({
   label,
   value,
@@ -1330,14 +1634,39 @@ function ColorRow({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const [text, setText] = useState(value);
+  useEffect(() => {
+    setText(value);
+  }, [value]);
+
+  const commit = (raw: string) => {
+    const match = raw.trim().match(/^#?([0-9a-fA-F]{6})$/);
+    if (match) {
+      onChange(`#${match[1].toLowerCase()}`);
+    } else {
+      setText(value);
+    }
+  };
+
   return (
     <div className="setrow">
       <span className="setrow-label">{label}</span>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <input className="hexinput" value={value} readOnly />
+        <input
+          className="hexinput"
+          value={text}
+          aria-label={label}
+          spellCheck={false}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={(e) => commit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit((e.target as HTMLInputElement).value);
+          }}
+        />
         <input
           type="color"
           value={value}
+          aria-label={label}
           onChange={(e) => onChange(e.target.value)}
         />
       </div>

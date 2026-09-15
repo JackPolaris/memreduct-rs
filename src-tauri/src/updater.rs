@@ -54,6 +54,15 @@ pub fn manifest_url() -> String {
     )
 }
 
+/// Human-facing "latest release" page.
+///
+/// Separate from [`manifest_url`] on purpose: the manifest is machine JSON, so
+/// linking the UI at it is useless to a user (and confusing when the label reads
+/// "open in browser"). The endpoint stays available for diagnostics.
+pub fn release_page_url() -> String {
+    format!("https://github.com/{UPDATE_REPO}/releases/latest")
+}
+
 /// Result of a check, and the facts needed to diagnose a failed one.
 #[derive(Debug, serde::Serialize)]
 pub struct UpdateInfo {
@@ -74,7 +83,10 @@ pub struct UpdateInfo {
 #[derive(Debug, serde::Serialize)]
 pub struct UpdaterInfo {
     pub current_version: String,
+    /// Machine-readable manifest — used for diagnostics, shown as text.
     pub endpoint: String,
+    /// HTML release page — this is what the UI links to for the user.
+    pub release_page: String,
 }
 
 /// Report the endpoint and current version without contacting the network.
@@ -83,6 +95,7 @@ pub fn get_updater_info(app: AppHandle) -> UpdaterInfo {
     UpdaterInfo {
         current_version: app.package_info().version.to_string(),
         endpoint: manifest_url(),
+        release_page: release_page_url(),
     }
 }
 

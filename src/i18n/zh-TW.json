@@ -110,8 +110,10 @@
     "updateCheckFailed": "失敗",
     "updateNever": "尚未檢查",
     "updateFound": "發現新版本",
-    "updateEndpoint": "更新位址",
-    "updateEndpointOpen": "在瀏覽器中開啟"
+    "updatePage": "最新版本",
+    "updatePageOpen": "在瀏覽器中開啟",
+    "updateNotesLink": "查看發行說明",
+    "updateEndpoint": "更新清單"
   },
   "regions": {
     "workingSet": "工作集",

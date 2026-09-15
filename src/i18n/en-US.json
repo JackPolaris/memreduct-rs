@@ -110,8 +110,10 @@
     "updateCheckFailed": "Failed",
     "updateNever": "Not checked yet",
     "updateFound": "New version available",
-    "updateEndpoint": "Update endpoint",
-    "updateEndpointOpen": "Open in browser"
+    "updatePage": "Latest release",
+    "updatePageOpen": "Open in browser",
+    "updateNotesLink": "Release notes",
+    "updateEndpoint": "Update manifest"
   },
   "regions": {
     "workingSet": "Working Set",

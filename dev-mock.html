@@ -1,0 +1,204 @@
+<!doctype html>
+<!--
+  UI preview harness — renders the real UI in a plain browser by stubbing the
+  Tauri IPC bridge, so layout/animations can be inspected and screenshotted
+  (headless Edge) without launching the desktop build. It also replays the
+  backend events the app listens to, exercising real code paths.
+
+  Usage:  npm run dev          (vite, port 1420)
+          open /dev-mock.html            main view
+                /dev-mock.html?view=about  tray "about" event
+                /dev-mock.html?diag=1      layout overflow report overlay
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mem Reduct — UI preview (mocked IPC)</title>
+    <script>
+      (() => {
+        const callbacks = new Map();
+        let nextId = 1;
+        const listeners = new Map();
+        let used = 8.4;
+        let pct = 68;
+
+        const memoryObject = (total, usedRatio) => {
+          const totalBytes = total * 1024 ** 3;
+          const usedBytes = Math.round(totalBytes * usedRatio);
+          const percent = Math.round(usedRatio * 100);
+          return {
+            total_bytes: totalBytes,
+            free_bytes: totalBytes - usedBytes,
+            used_bytes: usedBytes,
+            percent,
+            percent_f: percent,
+          };
+        };
+        const memoryInfo = () => {
+          const total = 32;
+          const usedBytes = used * 1024 ** 3;
+          return {
+            physical_memory: {
+              total_bytes: total * 1024 ** 3,
+              free_bytes: (total - used) * 1024 ** 3,
+              used_bytes: usedBytes,
+              percent: pct,
+              percent_f: pct,
+            },
+            page_file: memoryObject(8, 0.42),
+            system_cache: memoryObject(4, 0.61),
+          };
+        };
+
+        const config = {
+          start_minimized: false,
+          show_reduct_confirmation: true,
+          theme: "light",
+          accent_color: "green",
+          use_dark_theme: false,
+          language: "zh-CN",
+          autoreduct_enable: true,
+          autoreduct_value: 90,
+          autoreduct_interval_enable: false,
+          autoreduct_interval_value: 30,
+          allow_standby_list_cleanup: false,
+          reduct_mask: 0xff,
+          hotkey_clean_enable: true,
+          hotkey_clean: (2 << 16) | 0x71,
+          tray_use_transparency: false,
+          tray_show_border: false,
+          tray_round_corners: true,
+          tray_change_bg: true,
+          tray_color_text: 0xffffff,
+          tray_color_bg: 0x008040,
+          tray_color_warning: 0xff8040,
+          tray_color_danger: 0xec1c24,
+          tray_action_dc: 0,
+          tray_action_mc: 1,
+          tray_level_warning: 70,
+          tray_level_danger: 90,
+          tray_tip_shown: true,
+          balloon_clean_results: true,
+          statistic_last_reduct: 0,
+        };
+
+        const manifestUrl =
+          "https://github.com/JackPolaris/memreduct-rs/releases/latest/download/update-x86_64-pc-windows-msvc.json";
+
+        window.__TAURI_INTERNALS__ = {
+          transformCallback(cb) {
+            const id = nextId++;
+            callbacks.set(id, cb);
+            return id;
+          },
+          unregisterCallback(id) {
+            callbacks.delete(id);
+          },
+          convertFileSrc: (p) => p,
+          invoke: async (cmd, args) => {
+            switch (cmd) {
+              case "get_memory_info":
+                return memoryInfo();
+              case "is_elevated":
+                return true;
+              case "get_version":
+                return "3.5.14";
+              case "get_config_location":
+                return "appdata";
+              case "get_os_info":
+                return { major: 10, minor: 0, is_win8_1: true, is_win10: true };
+              case "get_updater_info":
+                return {
+                  current_version: "3.5.14",
+                  endpoint: manifestUrl,
+                  release_page: "https://github.com/JackPolaris/memreduct-rs/releases/latest",
+                };
+              case "check_for_update":
+                return {
+                  available: true,
+                  version: "3.5.15",
+                  date: "2026-09-20T00:00:00Z",
+                  body:
+                    "Mem Reduct 3.5.15\n\n" +
+                    "- 修复检查更新在代理环境下失败的问题\n" +
+                    "- 托盘图标支持自定义字体\n" +
+                    "- 优化清理区域的保存逻辑",
+                  current_version: "3.5.14",
+                  endpoint: manifestUrl,
+                };
+              case "get_config":
+                return config;
+              case "get_autostart":
+                return false;
+              case "clean_memory":
+                used = 6.1;
+                pct = 52;
+                return {
+                  freed_bytes: 2.4 * 1024 ** 3,
+                  applied_mask: 0xff,
+                  regions: ["workingSet", "systemFileCache", "standbyPriority0", "standbyList", "modifiedList", "combineMemoryLists", "registryCache", "modifiedFileCache"],
+                  failed: [],
+                };
+              case "plugin:event|listen": {
+                listeners.set(args.event, args.handler);
+                return args.handler;
+              }
+              case "plugin:event|unlisten":
+                return null;
+              default:
+                return null;
+            }
+          },
+        };
+
+        const emit = (event, payload) => {
+          const handler = listeners.get(event);
+          if (handler) callbacks.get(handler)?.({ event, id: handler, payload });
+        };
+
+        // Replay the backend's sample once, then settle: under headless
+        // `--virtual-time-budget` the timers are fast-forwarded, so a repeating
+        // push would retarget the entrance animations thousands of times and the
+        // screenshot would catch a mid-tween value.
+        setTimeout(() => emit("memory-update", memoryInfo()), 200);
+
+        // `?view=about` mimics the tray menu's "about" command (same event the
+        // Rust side emits), so the About diagnostics can be screenshotted too.
+        if (new URLSearchParams(location.search).get("view") === "about") {
+          setTimeout(() => emit("show-about", {}), 400);
+        }
+
+        // `?diag=1` overlays a layout report: any element sticking out past the
+        // viewport is listed, which pinpoints horizontal overflow without a CDP
+        // session. Remove with the rest of this file.
+        if (new URLSearchParams(location.search).get("diag") === "1") {
+          setTimeout(() => {
+            const de = document.documentElement;
+            const offenders = [...document.querySelectorAll("body *")]
+              .map((el) => ({ el, r: el.getBoundingClientRect() }))
+              .filter(({ r }) => r.right > window.innerWidth + 0.5 && r.width > 4)
+              .slice(0, 8)
+              .map(
+                ({ el, r }) =>
+                  `${el.tagName.toLowerCase()}.${String(el.className).split(" ")[0]} ` +
+                  `left=${Math.round(r.left)} right=${Math.round(r.right)} w=${Math.round(r.width)}`
+              );
+            const pre = document.createElement("pre");
+            pre.style.cssText =
+              "position:fixed;left:0;bottom:0;z-index:99999;background:#000;color:#0f0;" +
+              "font:10px/1.45 monospace;padding:6px;margin:0;max-width:100%;white-space:pre-wrap";
+            pre.textContent =
+              `innerWidth=${window.innerWidth} scrollWidth=${de.scrollWidth} ` +
+              `bodyScrollWidth=${document.body.scrollWidth}\n` +
+              (offenders.length ? offenders.join("\n") : "(无元素越界)");
+            document.body.appendChild(pre);
+          }, 900);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

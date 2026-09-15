@@ -113,7 +113,10 @@ export interface UpdateInfo {
 /** Static updater facts (no network I/O). */
 export interface UpdaterInfo {
   current_version: string;
+  /** Machine-readable manifest — diagnostics only. */
   endpoint: string;
+  /** HTML release page — what the UI links to for the user. */
+  release_page: string;
 }
 
 export const checkForUpdate = () => invoke<UpdateInfo>("check_for_update");

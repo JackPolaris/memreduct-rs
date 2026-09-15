@@ -30,3 +30,6 @@ Thumbs.db
 
 # WorkBuddy project memory/state
 .workbuddy/
+
+# UI preview screenshots (dev-mock.html harness output)
+.preview/
