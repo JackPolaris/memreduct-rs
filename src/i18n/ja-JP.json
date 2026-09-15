@@ -104,7 +104,14 @@
     "saveFailed": "設定の保存に失敗しました",
     "hotkeyRecording": "キーの組み合わせを押してください…",
     "hotkeyFailed": "ショートカットを登録できませんでした（他アプリが使用中の可能性があります）。別の組み合わせを選んでください",
-    "hotkeyNeedModifier": "グローバルショートカットには修飾キー(Ctrl/Alt/Shift/Win)または F1–F24 が必要です"
+    "hotkeyNeedModifier": "グローバルショートカットには修飾キー(Ctrl/Alt/Shift/Win)または F1–F24 が必要です",
+    "updateLastCheck": "前回の確認",
+    "updateCheckOk": "正常",
+    "updateCheckFailed": "失敗",
+    "updateNever": "未確認",
+    "updateFound": "新しいバージョンがあります",
+    "updateEndpoint": "更新URL",
+    "updateEndpointOpen": "ブラウザーで開く"
   },
   "regions": {
     "workingSet": "ワーキングセット",

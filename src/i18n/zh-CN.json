@@ -108,7 +108,14 @@
     "saveFailed": "保存设置失败",
     "hotkeyRecording": "按下组合键…",
     "hotkeyFailed": "热键注册失败：可能已被其他程序占用，请换一个组合键",
-    "hotkeyNeedModifier": "全局热键需要至少一个修饰键(Ctrl/Alt/Shift/Win),或使用 F1–F24"
+    "hotkeyNeedModifier": "全局热键需要至少一个修饰键(Ctrl/Alt/Shift/Win),或使用 F1–F24",
+    "updateLastCheck": "上次检查",
+    "updateCheckOk": "正常",
+    "updateCheckFailed": "失败",
+    "updateNever": "尚未检查",
+    "updateFound": "发现新版本",
+    "updateEndpoint": "更新地址",
+    "updateEndpointOpen": "在浏览器中打开"
   },
   "regions": {
     "workingSet": "工作集",

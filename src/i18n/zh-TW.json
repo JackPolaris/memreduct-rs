@@ -104,7 +104,14 @@
     "saveFailed": "儲存設定失敗",
     "hotkeyRecording": "請按下組合鍵…",
     "hotkeyFailed": "快速鍵註冊失敗：可能已被其他程式占用，請更換組合鍵",
-    "hotkeyNeedModifier": "全域快速鍵需要至少一個修飾鍵(Ctrl/Alt/Shift/Win),或使用 F1–F24"
+    "hotkeyNeedModifier": "全域快速鍵需要至少一個修飾鍵(Ctrl/Alt/Shift/Win),或使用 F1–F24",
+    "updateLastCheck": "上次檢查",
+    "updateCheckOk": "正常",
+    "updateCheckFailed": "失敗",
+    "updateNever": "尚未檢查",
+    "updateFound": "發現新版本",
+    "updateEndpoint": "更新位址",
+    "updateEndpointOpen": "在瀏覽器中開啟"
   },
   "regions": {
     "workingSet": "工作集",

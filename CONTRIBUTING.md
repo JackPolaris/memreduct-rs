@@ -150,6 +150,24 @@ gh release create vX.Y.Z \
 三个资产缺一不可：安装包、`.sig` 签名、更新清单。
 上传完成后 `releases/latest` 会自动指向新版本，客户端下次启动即可收到更新。
 
+### 5. 发布后自检
+
+1. `gh release view vX.Y.Z` 确认三个资产都是 `uploaded`，且 `releases/latest` 指向新 tag；
+2. 用 `gh api repos/OWNER/REPO/releases/tags/vX.Y.Z --jq '.assets[] | "\(.name) \(.digest)"'`
+   把远端 sha256 与本地 `sha256sum` 对照，确认上传的字节就是本地产物；
+3. 在应用「关于」页点「更新地址」旁的链接，浏览器应能直接看到清单 JSON。
+
+**关于"检查更新失败"的排查**：客户端的更新请求走 `github.com`，
+而 `api.github.com`、`uploads.github.com` 是另外的域名 —— 有些代理只放行后者，
+于是 `gh` 一切正常、应用却检查不到更新。两个已知表现：
+
+- 端点被拦截（返回 502/403）时，**更新插件会把非 2xx 响应报成「未找到发布」**，
+  而不是网络错误（它只为真正的传输失败记录错误）。所以"未找到发布"不等于清单有问题；
+- 因此 `src-tauri/src/updater.rs` 在代理失败后会**忽略代理重试一次**，
+  并把实际使用的端点与失败原因显示在「关于」页。
+
+排查清单：浏览器能否打开清单地址 → 应用「关于」页显示的失败原因 → 该机代理是否过滤 `github.com`。
+
 ## 清理实现与区域掩码
 
 清理通过未文档化的 `NtSetSystemInformation` 完成（与原版一致，需管理员权限）。

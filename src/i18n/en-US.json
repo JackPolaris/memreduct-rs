@@ -104,7 +104,14 @@
     "saveFailed": "Failed to save settings",
     "hotkeyRecording": "Press a key combination…",
     "hotkeyFailed": "The hotkey could not be registered (likely taken by another app) — pick a different combination",
-    "hotkeyNeedModifier": "A global hotkey needs a modifier (Ctrl/Alt/Shift/Win), or an F1–F24 key"
+    "hotkeyNeedModifier": "A global hotkey needs a modifier (Ctrl/Alt/Shift/Win), or an F1–F24 key",
+    "updateLastCheck": "Last check",
+    "updateCheckOk": "OK",
+    "updateCheckFailed": "Failed",
+    "updateNever": "Not checked yet",
+    "updateFound": "New version available",
+    "updateEndpoint": "Update endpoint",
+    "updateEndpointOpen": "Open in browser"
   },
   "regions": {
     "workingSet": "Working Set",

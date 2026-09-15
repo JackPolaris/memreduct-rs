@@ -99,16 +99,26 @@ export interface TrayLabels {
 export const applyTrayLabels = (labels: TrayLabels) =>
   invoke<void>("apply_tray_labels", { labels });
 
-// Automatic update via tauri-plugin-updater (source configurable in Settings).
+// Automatic update via tauri-plugin-updater (source fixed to the official repo).
 export interface UpdateInfo {
   available: boolean;
   version: string;
   date: string;
   body: string;
   current_version: string;
+  /** Endpoint that was queried — shown in the UI so a failed check is diagnosable. */
+  endpoint: string;
 }
+
+/** Static updater facts (no network I/O). */
+export interface UpdaterInfo {
+  current_version: string;
+  endpoint: string;
+}
+
 export const checkForUpdate = () => invoke<UpdateInfo>("check_for_update");
 export const downloadAndInstall = () => invoke<void>("download_and_install");
+export const getUpdaterInfo = () => invoke<UpdaterInfo>("get_updater_info");
 export const getConfig = () => invoke<Config>("get_config");
 export const saveConfig = (config: Config) =>
   invoke<void>("save_config", { config });

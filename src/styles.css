@@ -799,6 +799,25 @@ body {
   flex-shrink: 0;
 }
 
+/* Failed update check / error state. */
+.setrow-value.bad {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* Multi-line diagnostic text (e.g. the reason an update check failed). */
+.hint.update-detail {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11.5px;
+  padding: 4px 4px 8px;
+}
+
+.hint.update-detail.bad {
+  color: var(--danger);
+}
+
 .link {
   color: var(--accent);
   text-decoration: none;

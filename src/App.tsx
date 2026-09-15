@@ -12,6 +12,7 @@ import {
   getConfigLocation,
   getMemoryInfo,
   getOsInfo,
+  getUpdaterInfo,
   getVersion,
   isElevated,
   notify,
@@ -21,6 +22,8 @@ import {
   type CleanDonePayload,
   type Config,
   type MemoryInfo,
+  type UpdateInfo,
+  type UpdaterInfo,
 } from "./api";
 import {
   MASK_ALL,
@@ -91,6 +94,34 @@ function pressureColor(percent: number, warnLevel: number, dangerLevel: number):
 const DEFAULT_WARN_LEVEL = 70;
 const DEFAULT_DANGER_LEVEL = 90;
 
+/** Result of the most recent update check, shown on the About page. */
+interface CheckOutcome {
+  ok: boolean;
+  /** Version announced when `ok` and an update exists ("" when up to date). */
+  version: string;
+  /** Human-readable detail: the failure reason, or the version we are on. */
+  detail: string;
+  /** Whether a newer version was found. */
+  available: boolean;
+  at: string;
+}
+
+/**
+ * First bullet of a release-notes body, for the one-line update prompt.
+ *
+ * The prompt is a single-line pill, so the full notes cannot be shown there;
+ * picking the first bullet at least tells the user *what* the update is about
+ * instead of only its number.
+ */
+function notesFirstLine(notes: string): string {
+  const line = notes
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l.startsWith("-") || l.startsWith("*"));
+  if (!line) return "";
+  return line.replace(/^[-*]\s*/, "").trim();
+}
+
 /**
  * One-line summary of a cleanup result, shared by the manual path and the
  * `clean-done` events so both report identically.
@@ -126,6 +157,10 @@ export default function App() {
   const [version, setVersion] = useState<string>("");
   const [elevated, setElevated] = useState<boolean | null>(null);
   const [configLocation, setConfigLocation] = useState<string>("");
+  /** Endpoint and version used by the updater (no network I/O). */
+  const [updaterInfo, setUpdaterInfo] = useState<UpdaterInfo | null>(null);
+  /** Outcome of the most recent update check, for the About page. */
+  const [lastCheck, setLastCheck] = useState<CheckOutcome | null>(null);
   const progressToastId = useRef<number | null>(null);
   /** Monotonic id source: `Date.now()` alone collides when two toasts are
    *  pushed within the same millisecond. */
@@ -264,6 +299,27 @@ export default function App() {
     }
   };
 
+  /**
+   * Show the one-line "new version" prompt.
+   *
+   * The pill is single-line, so the full release notes cannot go here; the first
+   * bullet is included to say what the update is about.
+   */
+  const showUpdatePrompt = (info: UpdateInfo) => {
+    const note = notesFirstLine(info.body);
+    pushToast(
+      i18n.t("settings.updateAvailable"),
+      note ? `v${info.version} · ${note}` : `v${info.version}`,
+      "update",
+      { stickyId: UPDATE_PROMPT_ID, action: () => startUpdateInstall() }
+    );
+  };
+
+  /** Remember what the last check did, so the About page can report it. */
+  const recordCheck = (outcome: Omit<CheckOutcome, "at">) => {
+    setLastCheck({ ...outcome, at: new Date().toLocaleTimeString() });
+  };
+
   useEffect(() => {
     tRef.current = t;
   }, [t]);
@@ -279,6 +335,8 @@ export default function App() {
     getConfigLocation().then(setConfigLocation).catch(() => {});
     // OS capabilities gate the regions this machine can actually clean.
     getOsInfo().then(setOsInfo).catch(() => {});
+    // Endpoint + current version for the About page's diagnostics.
+    getUpdaterInfo().then(setUpdaterInfo).catch(() => {});
     getConfig().then((c) => {
       setConfig(c);
       maskRef.current = c.reduct_mask;
@@ -286,18 +344,27 @@ export default function App() {
       // Apply the persisted language before any translated text is built.
       const lang = normalizeLanguage(c.language);
       if (lang) i18n.changeLanguage(lang);
-      // Startup update check (always on): if a new version exists, show an
-      // interactive pill with an "install" button (deduped to one pill).
+      // Startup update check (always on): show an interactive pill when a newer
+      // version exists.
+      //
+      // A failure is *recorded* instead of being swallowed: without it the user
+      // cannot tell "already up to date" apart from "the check never reached
+      // GitHub", which is exactly what a filtering proxy produces. The About
+      // page shows the outcome and the endpoint.
       checkForUpdate()
         .then((r) => {
-          if (r.available) {
-            pushToast(i18n.t("settings.updateAvailable"), `v${r.version}`, "update", {
-              stickyId: UPDATE_PROMPT_ID,
-              action: () => startUpdateInstall(),
-            });
-          }
+          recordCheck({
+            ok: true,
+            available: r.available,
+            version: r.available ? r.version : "",
+            detail: r.available ? `v${r.version}` : `v${r.current_version}`,
+          });
+          if (r.available) showUpdatePrompt(r);
         })
-        .catch(() => {});
+        .catch((e) => {
+          recordCheck({ ok: false, available: false, version: "", detail: String(e) });
+          console.warn("update check failed:", e);
+        });
     });
 
     const unlistenMemory = listen<MemoryInfo>("memory-update", (e) => {
@@ -608,7 +675,7 @@ export default function App() {
         </div>
         <div style={{ display: tab === "settings" ? "flex" : "none", flex: 1, minHeight: 0 }}>
           {config ? (
-            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} configLocation={configLocation} section={settingsSection} onSectionChange={setSettingsSection} onToast={pushToast} onUpdate={(v) => { pushToast(t("settings.updateAvailable"), `v${v}`, "update", { stickyId: UPDATE_PROMPT_ID, action: () => startUpdateInstall() }); }} />
+            <SettingsPanel config={config} t={t} onSave={saveConfigAndReload} version={version} configLocation={configLocation} section={settingsSection} onSectionChange={setSettingsSection} onToast={pushToast} updaterInfo={updaterInfo} lastCheck={lastCheck} onCheckOutcome={recordCheck} onUpdate={showUpdatePrompt} />
           ) : null}
         </div>
       </main>
@@ -789,6 +856,9 @@ function SettingsPanel({
   section,
   onSectionChange,
   onToast,
+  updaterInfo,
+  lastCheck,
+  onCheckOutcome,
   onUpdate,
 }: {
   config: Config;
@@ -799,7 +869,10 @@ function SettingsPanel({
   section: Section;
   onSectionChange: (s: Section) => void;
   onToast: (title: string, body: string, kind?: "info" | "success") => void;
-  onUpdate: (version: string) => void;
+  updaterInfo: UpdaterInfo | null;
+  lastCheck: CheckOutcome | null;
+  onCheckOutcome: (o: Omit<CheckOutcome, "at">) => void;
+  onUpdate: (info: UpdateInfo) => void;
 }) {
   const [draft, setDraft] = useState<Config>(config);
   const [autostart, setAutostartState] = useState<boolean>(false);
@@ -902,6 +975,11 @@ function SettingsPanel({
   // and install it in the background, then the app restarts automatically.
   // The GitHub endpoint is slow/unstable (measured 3–14s+ on this network), so
   // we guard with a hard timeout so the button never spins forever.
+  // Single "check for updates" flow: check → if a new version exists, offer to
+  // download and install it. The GitHub endpoint can be slow or unreachable
+  // (a filtering proxy is the usual cause), so the request is bounded here as
+  // well as in the backend, and the *reason* for a failure is reported instead
+  // of a bare "check failed" — plus recorded for the About page.
   const runUpdateCheck = async () => {
     if (updatePhase !== "idle") return;
     setUpdatePhase("checking");
@@ -909,19 +987,23 @@ function SettingsPanel({
       const r = await Promise.race([
         checkForUpdate(),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(t("settings.updateTimeout"))), 30000)
+          setTimeout(() => reject(new Error(t("settings.updateTimeout"))), 35000)
         ),
       ]);
       if (r.available) {
+        onCheckOutcome({ ok: true, available: true, version: r.version, detail: `v${r.version}` });
         setUpdatePhase("idle");
         // Delegate to the shared update flow (interactive pill + progress).
-        onUpdate(r.version);
+        onUpdate(r);
       } else {
-        onToast(t("settings.updateNone"), `${t("settings.version")} ${r.current_version}`, "success");
-        notify(t("settings.updateNone"), `${t("settings.version")} ${r.current_version}`, true).catch(() => {});
+        const detail = `${t("settings.version")} ${r.current_version}`;
+        onCheckOutcome({ ok: true, available: false, version: "", detail });
+        onToast(t("settings.updateNone"), detail, "success");
+        notify(t("settings.updateNone"), detail, true).catch(() => {});
         setUpdatePhase("idle");
       }
     } catch (e) {
+      onCheckOutcome({ ok: false, available: false, version: "", detail: String(e) });
       onToast(t("settings.updateError"), String(e), "info");
       notify(t("settings.updateError"), String(e), true).catch(() => {});
       setUpdatePhase("idle");
@@ -1082,6 +1164,46 @@ function SettingsPanel({
               <div className="setrow">
                 <span className="setrow-label">{t("settings.version")}</span>
                 <span className="setrow-value">{version ? `v${version}` : "…"}</span>
+              </div>
+              {/* Update diagnostics: without these, a failed check is
+                  indistinguishable from "already up to date". */}
+              <div className="setrow">
+                <span className="setrow-label">{t("settings.updateLastCheck")}</span>
+                <span className={`setrow-value ${lastCheck && !lastCheck.ok ? "bad" : ""}`}>
+                  {lastCheck
+                    ? `${lastCheck.at} · ${lastCheck.ok ? t("settings.updateCheckOk") : t("settings.updateCheckFailed")}`
+                    : t("settings.updateNever")}
+                </span>
+              </div>
+              {lastCheck && (
+                <div className={`hint update-detail ${lastCheck.ok ? "" : "bad"}`}>
+                  {lastCheck.available
+                    ? `${t("settings.updateFound")} v${lastCheck.version}`
+                    : lastCheck.detail}
+                </div>
+              )}
+              <div className="setrow">
+                <span className="setrow-label">
+                  <span className="icon"><IconInfo size={15} /></span>
+                  {t("settings.updateEndpoint")}
+                </span>
+                {updaterInfo ? (
+                  <a
+                    className="link"
+                    href={updaterInfo.endpoint}
+                    title={updaterInfo.endpoint}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      // Opening it in a browser is the quickest way to confirm
+                      // whether the endpoint is reachable at all.
+                      openExternal(updaterInfo.endpoint).catch(() => {});
+                    }}
+                  >
+                    {t("settings.updateEndpointOpen")}
+                  </a>
+                ) : (
+                  <span className="setrow-value">…</span>
+                )}
               </div>
               <div className="setrow">
                 <span className="setrow-label">

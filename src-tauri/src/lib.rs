@@ -627,7 +627,8 @@ pub fn run() {
             open_external,
             apply_tray_labels,
             updater::check_for_update,
-            updater::download_and_install
+            updater::download_and_install,
+            updater::get_updater_info
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

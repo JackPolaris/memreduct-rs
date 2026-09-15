@@ -1,8 +1,10 @@
 //! Automatic updater backed by `tauri-plugin-updater`.
 //!
 //! The update source is hardcoded to the official GitHub repository
-//! (`JackPolaris/memreduct-rs`); the UI only exposes a single "Check for
-//! updates" button and the current version — no repo/key configuration.
+//! (`JackPolaris/memreduct-rs`); the UI exposes a single "check for updates"
+//! button and the current version — no repo/key configuration.
+
+use std::time::Duration;
 
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_updater::UpdaterExt;
@@ -10,29 +12,49 @@ use tauri_plugin_updater::UpdaterExt;
 /// Official release repository (hardcoded, owner/repo).
 const UPDATE_REPO: &str = "JackPolaris/memreduct-rs";
 
-/// Release target triple of the running binary.
+/// Deadline for a manifest request.
 ///
-/// `tauri.conf.json` only substitutes `{{target}}` for endpoints declared at
-/// build time; these endpoints are assembled at runtime, so the architecture has
-/// to be mapped explicitly. A hardcoded `x86_64` made the updater a 404 for
-/// anyone running the `aarch64` (Windows on ARM) or 32-bit build.
-fn target_triple() -> &'static str {
-    match std::env::consts::ARCH {
+/// The plugin's builder leaves this unset and its `Config` has no timeout field,
+/// so without an explicit value a check against an unreachable endpoint (blocked
+/// proxy, captive portal, dead network, `github.com` filtered out) hangs until
+/// the OS gives up — minutes — while the UI shows nothing at all.
+const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Deadline for the installer download.
+///
+/// `Updater::check` hard-codes `timeout: None` on the `Update` it returns, so the
+/// download request is unlimited by default as well; we patch it before
+/// downloading. Generous, because it covers the whole body on a slow link.
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Map a Rust architecture name to its release target triple.
+fn triple_for(arch: &str) -> &'static str {
+    match arch {
         "aarch64" => "aarch64-pc-windows-msvc",
         "x86" => "i686-pc-windows-msvc",
         _ => "x86_64-pc-windows-msvc",
     }
 }
 
+/// Release target triple of the running binary.
+///
+/// `tauri.conf.json` only substitutes `{{target}}` for endpoints declared at
+/// build time; this endpoint is assembled at runtime, so the architecture has to
+/// be mapped explicitly. A hardcoded `x86_64` made the updater a 404 for anyone
+/// running the `aarch64` (Windows on ARM) or 32-bit build.
+fn target_triple() -> &'static str {
+    triple_for(std::env::consts::ARCH)
+}
+
 /// Full URL of the update manifest for this architecture.
-fn manifest_url() -> String {
+pub fn manifest_url() -> String {
     format!(
         "https://github.com/{UPDATE_REPO}/releases/latest/download/update-{}.json",
         target_triple()
     )
 }
 
-/// Serialisable update info returned to the frontend.
+/// Result of a check, and the facts needed to diagnose a failed one.
 #[derive(Debug, serde::Serialize)]
 pub struct UpdateInfo {
     pub available: bool,
@@ -40,6 +62,28 @@ pub struct UpdateInfo {
     pub date: String,
     pub body: String,
     pub current_version: String,
+    /// Endpoint that was actually queried.
+    ///
+    /// Surfaced to the UI: when a check fails, "which URL did you try" is the
+    /// single most useful piece of information (a proxy that filters
+    /// `github.com` is the common cause), and previously nothing was shown.
+    pub endpoint: String,
+}
+
+/// Static updater facts, without any network I/O.
+#[derive(Debug, serde::Serialize)]
+pub struct UpdaterInfo {
+    pub current_version: String,
+    pub endpoint: String,
+}
+
+/// Report the endpoint and current version without contacting the network.
+#[tauri::command]
+pub fn get_updater_info(app: AppHandle) -> UpdaterInfo {
+    UpdaterInfo {
+        current_version: app.package_info().version.to_string(),
+        endpoint: manifest_url(),
+    }
 }
 
 /// Build the updater against the hardcoded official repository.
@@ -47,54 +91,144 @@ pub struct UpdateInfo {
 /// The signing public key comes from `tauri.conf.json`
 /// (`plugins.updater.pubkey`), which `updater_builder()` picks up — it is not
 /// duplicated in the user config any more.
-fn build_updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
+///
+/// `no_proxy` bypasses the system/environment proxy; see [`check_update`].
+fn build_updater(app: &AppHandle, no_proxy: bool) -> Result<tauri_plugin_updater::Updater, String> {
     let endpoint = manifest_url();
+    let url = url::Url::parse(&endpoint).map_err(|e| format!("更新地址无效({endpoint}):{e}"))?;
 
-    app.updater_builder()
-        .endpoints(vec![url::Url::parse(&endpoint).map_err(|e| e.to_string())?])
-        .map_err(|e| e.to_string())?
+    let builder = app.updater_builder().timeout(CHECK_TIMEOUT);
+    // `.no_proxy()` is only meaningful on the fallback attempt; the normal path
+    // must keep honouring the machine's proxy configuration.
+    let builder = if no_proxy {
+        builder.no_proxy()
+    } else {
+        builder
+    };
+
+    builder
+        .endpoints(vec![url])
+        .map_err(|e| format!("更新地址被拒绝:{e}"))?
         .build()
-        .map_err(|e| e.to_string())
+        .map_err(|e| format!("初始化更新器失败:{e}"))
+}
+
+/// What a check produced, plus how it got there.
+struct Checked {
+    update: Option<tauri_plugin_updater::Update>,
+    /// True when the request only succeeded after bypassing the proxy, so the
+    /// download can stay on the route that is known to work.
+    via_no_proxy: bool,
+}
+
+/// Check for an update, retrying once with the proxy bypassed.
+///
+/// Why the fallback exists: a proxy that filters `github.com` (or cannot handle
+/// the redirect to `objects.githubusercontent.com`) is answered with a non-2xx
+/// status, and the plugin turns a non-2xx response into `ReleaseNotFound` — *not*
+/// into a network error (it only records `last_error` for real transport
+/// failures). So the user sees "no release found" while the actual cause is the
+/// proxy. Since the machine usually *can* reach GitHub directly, one retry with
+/// the proxy disabled turns "updates never work" into "updates work, a little
+/// slower".
+async fn check_update(app: &AppHandle) -> Result<Checked, String> {
+    let endpoint = manifest_url();
+    let current = app.package_info().version.to_string();
+
+    let via_proxy = build_updater(app, false)?;
+    match via_proxy.check().await {
+        Ok(update) => Ok(Checked {
+            update,
+            via_no_proxy: false,
+        }),
+        Err(first) => {
+            let first = first.to_string();
+            let direct = build_updater(app, true)?;
+            match direct.check().await {
+                Ok(update) => {
+                    eprintln!("[updater] 经代理检查失败,已忽略代理重试成功:{first}");
+                    Ok(Checked {
+                        update,
+                        via_no_proxy: true,
+                    })
+                }
+                Err(second) => Err(check_failed(
+                    &endpoint,
+                    &current,
+                    &format!("{first}(忽略代理重试亦失败:{second})"),
+                )),
+            }
+        }
+    }
+}
+
+/// Human-readable failure message, with the context needed to act on it.
+fn check_failed(endpoint: &str, current: &str, reason: &str) -> String {
+    format!(
+        "检查更新失败(当前 v{current}):{reason}\n\
+         更新地址:{endpoint}\n\
+         若持续失败,通常是网络或代理无法访问 github.com ——\n\
+         被代理拦截时,插件会把它报告成「未找到发布」而不是网络错误。"
+    )
 }
 
 /// Check for an update against the official repository.
 #[tauri::command]
 pub async fn check_for_update(app: AppHandle) -> Result<UpdateInfo, String> {
-    let updater = build_updater(&app)?;
-    match updater.check().await {
-        Ok(Some(update)) => Ok(UpdateInfo {
+    let endpoint = manifest_url();
+    let current = app.package_info().version.to_string();
+
+    match check_update(&app).await {
+        Ok(Checked {
+            update: Some(update),
+            ..
+        }) => Ok(UpdateInfo {
             available: true,
             version: update.version.clone(),
             date: update.date.map(|d| d.to_string()).unwrap_or_default(),
-            body: update.body.unwrap_or_default(),
+            body: update.body.clone().unwrap_or_default(),
             current_version: update.current_version.clone(),
+            endpoint,
         }),
-        Ok(None) => {
-            let current = app.package_info().version.to_string();
-            Ok(UpdateInfo {
-                available: false,
-                version: String::new(),
-                date: String::new(),
-                body: String::new(),
-                current_version: current,
-            })
+        Ok(Checked { update: None, .. }) => Ok(UpdateInfo {
+            available: false,
+            version: String::new(),
+            date: String::new(),
+            body: String::new(),
+            current_version: current,
+            endpoint,
+        }),
+        Err(message) => {
+            // Release builds have no console; keep it for debug/CI runs.
+            eprintln!("[updater] {message}");
+            Err(message)
         }
-        Err(e) => Err(format!("检查更新失败: {e}")),
     }
 }
 
-/// Download the latest update and install it in the background, then exit the
-/// app so the installer can replace the binary / relaunch it.
+/// Download the latest update and install it, then let the plugin exit the app
+/// so the installer can replace the binary.
 #[tauri::command]
 pub async fn download_and_install(app: AppHandle) -> Result<(), String> {
-    let updater = build_updater(&app)?;
-    let update = updater.check().await.map_err(|e| e.to_string())?;
-    let update = update.ok_or_else(|| "没有可用更新".to_string())?;
+    // Re-check so the download always uses the URL currently announced. The
+    // failure text says so explicitly, otherwise it looks like the install
+    // itself failed.
+    let checked = check_update(&app)
+        .await
+        .map_err(|e| format!("下载前重新检查更新失败\n{e}"))?;
 
-    // Download with live progress emitted to the frontend. The `on_download_finish`
-    // callback must stay empty: exiting here would kill the process BEFORE the
-    // installer is launched. `Update::install` itself ShellExecutes the
-    // installer and then calls `std::process::exit(0)` on its own.
+    let mut update = checked.update.ok_or_else(|| "没有可用更新".to_string())?;
+
+    // Stay on whichever route just worked, and give the download a deadline:
+    // the plugin builds this `Update` with `timeout: None`, so it would
+    // otherwise never time out.
+    update.no_proxy = checked.via_no_proxy;
+    update.timeout = Some(DOWNLOAD_TIMEOUT);
+
+    // Live progress to the frontend. `on_download_finish` must stay empty:
+    // exiting there would kill the process BEFORE the installer is launched.
+    // `Update::install` launches the installer and then calls
+    // `std::process::exit(0)` on its own.
     let progress_app = app.clone();
     update
         .download_and_install(
@@ -107,11 +241,56 @@ pub async fn download_and_install(app: AppHandle) -> Result<(), String> {
             || {},
         )
         .await
-        .map_err(|e| format!("下载/安装更新失败: {e}"))
+        .map_err(|e| format!("下载或安装更新失败:{e}"))
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn target_triple_maps_each_architecture() {
+        assert_eq!(triple_for("x86_64"), "x86_64-pc-windows-msvc");
+        assert_eq!(triple_for("aarch64"), "aarch64-pc-windows-msvc");
+        // 32-bit builds must not fall back to the x86_64 manifest.
+        assert_eq!(triple_for("x86"), "i686-pc-windows-msvc");
+        assert_eq!(target_triple(), triple_for(std::env::consts::ARCH));
+    }
+
+    #[test]
+    fn endpoint_matches_the_running_architecture() {
+        let url = manifest_url();
+        assert!(
+            url.starts_with(
+                "https://github.com/JackPolaris/memreduct-rs/releases/latest/download/"
+            ),
+            "unexpected endpoint: {url}"
+        );
+        // The manifest is fetched by the app itself, so the filename must carry
+        // this build's target triple.
+        assert!(
+            url.ends_with(&format!("update-{}.json", target_triple())),
+            "endpoint must carry the target triple: {url}"
+        );
+    }
+
+    #[test]
+    fn failure_message_carries_context() {
+        let message = check_failed("https://example.test/update.json", "3.5.13", "timed out");
+        assert!(message.contains("3.5.13"));
+        assert!(message.contains("https://example.test/update.json"));
+        assert!(message.contains("timed out"));
+        assert!(message.contains("github.com"));
+    }
+
+    #[test]
+    fn timeouts_are_bounded() {
+        // A missing timeout is the bug this guards: the request would hang until
+        // the OS gave up.
+        assert!(CHECK_TIMEOUT.as_secs() > 0 && CHECK_TIMEOUT.as_secs() <= 60);
+        assert!(DOWNLOAD_TIMEOUT >= CHECK_TIMEOUT);
+    }
+
     #[test]
     fn remote_release_parses_manifest() {
         // Use the REAL manifest content downloaded from GitHub (verbatim).
