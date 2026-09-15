@@ -38,6 +38,14 @@ export interface Config {
   start_minimized: boolean;
   show_reduct_confirmation: boolean;
   theme: string;
+  /**
+   * UI skin: `glass` | `industrial` | `neon` | `terminal` | `minimal`.
+   *
+   * Independent of `theme`: the skin decides the visual language, `theme` only
+   * picks the light or dark palette within it. Keys must match
+   * `UI_STYLES` in `src-tauri/src/config.rs` and `UI_STYLES` in `src/uiStyles.ts`.
+   */
+  ui_style: string;
   accent_color: string;
   use_dark_theme: boolean;
   language: string;

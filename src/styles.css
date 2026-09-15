@@ -1772,6 +1772,1329 @@ input[type="color"] {
   z-index: 300;
 }
 
+/* ============================================================
+   UI skins
+   ============================================================
+
+   A skin is a whole visual language, not a colour swap: corner radius, border
+   weight, elevation model, typography and how much decoration is allowed. It is
+   selected with `data-ui` on `.app` (see `src/uiStyles.ts`) and is orthogonal to
+   `.dark`, which only picks the palette.
+
+   Two rules make the layering work:
+
+   1. Every block here re-declares a *complete* palette. `.app[data-ui="x"]` and
+      `.app.dark` have the same specificity, and these blocks come last, so a
+      light palette written here would otherwise silently beat `.app.dark`. Any
+      skin that supports both modes therefore writes both, with
+      `.app[data-ui="x"].dark` (one class more specific) for the dark half.
+   2. `data-ui` lives on `.app` only. All these rules would also have to beat
+      `body.dark` if the tokens were read from `body`, so `body`'s gradient is
+      repainted on `.app` instead — same size, same result, one less cascade
+      fight.
+
+   Skins that are dark-native (`neon`, `terminal`) pin the mode in JS rather than
+   writing back to `config.theme`, so switching away restores the user's choice.
+   ------------------------------------------------------------------------ */
+
+/* ===== A · 硬边工业 (industrial) =====
+   Right angles, full-weight outlines, hard offset shadows, stencilled labels.
+   No blur, no glow, no drifting ambient: the only "depth" is a solid shadow
+   that grows when you lift a card. */
+.app[data-ui="industrial"] {
+  --radius: 0px;
+  --radius-sm: 0px;
+  --blur: 0px;
+
+  --bg-grad-1: #efece4;
+  --bg-grad-2: #e2ded3;
+  --surface: #ffffff;
+  --surface-solid: #ffffff;
+  --surface2: #ffffff;
+  --surface3: #f7f5ef;
+  --glass-border: #141414;
+  --text: #141414;
+  --text-soft: #3a3a3a;
+  --muted: #6d6a63;
+  --border: #141414;
+  --border-strong: #141414;
+  --ring-bg: #ddd7ca;
+  --rim: transparent;
+
+  --ink: #141414;
+  --shadow-sm: 2px 2px 0 0 var(--ink);
+  --shadow-md: 5px 5px 0 0 var(--ink);
+  --shadow-lg: 9px 9px 0 0 var(--ink);
+
+  /* Flattening the accent gradient turns every *derived* use of it (checkbox,
+     primary button, brand mark) into a solid block in one declaration. */
+  --accent-grad: var(--accent);
+
+  background: linear-gradient(160deg, var(--bg-grad-1), var(--bg-grad-2));
+}
+
+.app[data-ui="industrial"].dark {
+  --bg-grad-1: #121212;
+  --bg-grad-2: #1a1a1a;
+  --surface: #1e1e1e;
+  --surface-solid: #1e1e1e;
+  --surface2: #202020;
+  --surface3: #262626;
+  --glass-border: #e9e6df;
+  --text: #f5f3ed;
+  --text-soft: #cbc8c0;
+  --muted: #918e87;
+  --border: #e9e6df;
+  --border-strong: #e9e6df;
+  --ring-bg: #343434;
+  --ink: #e9e6df;
+}
+
+/* The ambient layer becomes graph paper: no drifting light, no grain. */
+.app[data-ui="industrial"] .ambient-blob,
+.app[data-ui="industrial"] .ambient-grain {
+  display: none;
+}
+
+.app[data-ui="industrial"] .ambient-grid {
+  opacity: 0.6;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--text) 16%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--text) 16%, transparent) 1px, transparent 1px);
+  background-size: 30px 30px;
+  mask-image: linear-gradient(180deg, #000, rgba(0, 0, 0, 0.3));
+  -webkit-mask-image: linear-gradient(180deg, #000, rgba(0, 0, 0, 0.3));
+}
+
+/* Outlines carry the whole design, so every 1px hairline becomes 2px ink. */
+.app[data-ui="industrial"] .glass {
+  border-width: 2px;
+}
+
+.app[data-ui="industrial"] .metric,
+.app[data-ui="industrial"] .region,
+.app[data-ui="industrial"] .setgroup {
+  border-width: 2px;
+  box-shadow: none;
+}
+
+/* Signature: a solid accent rule down the left edge of the two big surfaces. */
+.app[data-ui="industrial"] .panel,
+.app[data-ui="industrial"] .hero {
+  border-left: 6px solid var(--accent);
+}
+
+/* Hovering *lifts* a card off the page instead of colouring it. */
+.app[data-ui="industrial"] .metric:hover {
+  border-color: var(--ink);
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-md);
+}
+
+.app[data-ui="industrial"] .region:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--accent-soft);
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.app[data-ui="industrial"] .region:active:not(:disabled) {
+  transform: translate(0, 0);
+  box-shadow: none;
+}
+
+.app[data-ui="industrial"] .metric-title,
+.app[data-ui="industrial"] .panel-title,
+.app[data-ui="industrial"] .setgroup-title,
+.app[data-ui="industrial"] .gauge-label {
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  font-weight: 800;
+}
+
+.app[data-ui="industrial"] .brand-name {
+  background: none;
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  font-weight: 800;
+  animation: none;
+}
+
+.app[data-ui="industrial"] .brand-mark {
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.app[data-ui="industrial"] .metric-icon {
+  border: 2px solid var(--ink);
+  background: var(--surface-solid);
+  color: var(--ink);
+}
+
+/* Flat arc, no halo, coarse dial marks, square head. */
+.app[data-ui="industrial"] .gauge {
+  background: conic-gradient(
+    from 0deg,
+    var(--gauge-color) 0 calc(var(--gauge-pct) * 1%),
+    var(--ring-bg) 0
+  );
+  border: 2px solid var(--ink);
+  box-shadow: none;
+}
+
+.app[data-ui="industrial"] .gauge::before {
+  display: none;
+}
+
+.app[data-ui="industrial"] .gauge-ticks {
+  inset: -9px;
+  opacity: 0.7;
+  background: repeating-conic-gradient(from 0deg, var(--ink) 0 1deg, transparent 1deg 15deg);
+}
+
+.app[data-ui="industrial"] .gauge-head-dot {
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 0;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--gauge-color);
+}
+
+.app[data-ui="industrial"] .gauge-inner {
+  border: 2px solid var(--ink);
+  background: var(--surface-solid);
+  box-shadow: none;
+}
+
+.app[data-ui="industrial"] .gauge-value {
+  font-weight: 800;
+  letter-spacing: -1.5px;
+}
+
+.app[data-ui="industrial"] .bar {
+  height: 8px;
+  border: 2px solid var(--ink);
+  background: var(--surface-solid);
+}
+
+.app[data-ui="industrial"] .bar-fill {
+  border-radius: 0;
+  background: var(--bar-color);
+  box-shadow: none;
+}
+
+.app[data-ui="industrial"] .bar-fill::after {
+  display: none;
+}
+
+.app[data-ui="industrial"] .region .check {
+  border-width: 2px;
+  border-color: var(--ink);
+}
+
+.app[data-ui="industrial"] .region.on .check {
+  transform: none;
+  box-shadow: none;
+}
+
+.app[data-ui="industrial"] .clean-btn {
+  background: var(--accent);
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-md);
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  font-weight: 800;
+}
+
+.app[data-ui="industrial"] .clean-btn:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.app[data-ui="industrial"] .clean-btn:hover:not(:disabled)::after {
+  transform: translateX(-100%);
+}
+
+.app[data-ui="industrial"] .tabs,
+.app[data-ui="industrial"] .settings-tabs,
+.app[data-ui="industrial"] .settings-body {
+  border-width: 2px;
+}
+
+.app[data-ui="industrial"] .tab-pill {
+  background: var(--ink);
+  box-shadow: none;
+}
+
+.app[data-ui="industrial"] .tabs button.active,
+.app[data-ui="industrial"] .settings-tabs button.active,
+.app[data-ui="industrial"] .segmented button.active {
+  /* Ink pill in light mode, paper pill in dark — `--surface-solid` is always
+     the opposite of `--ink`, so one declaration covers both. */
+  background: var(--ink);
+  color: var(--surface-solid);
+  box-shadow: none;
+}
+
+.app[data-ui="industrial"] .segmented {
+  border: 2px solid var(--ink);
+  background: var(--surface-solid);
+}
+
+.app[data-ui="industrial"] .statuschip {
+  border-width: 2px;
+  border-color: var(--ink);
+}
+
+.app[data-ui="industrial"] .statuschip .dot {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.app[data-ui="industrial"] .chipbtn,
+.app[data-ui="industrial"] .btn-primary,
+.app[data-ui="industrial"] .btn-ghost,
+.app[data-ui="industrial"] .update-banner-btn {
+  border: 2px solid var(--ink);
+  box-shadow: none;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 700;
+}
+
+.app[data-ui="industrial"] .update-banner {
+  border-width: 2px;
+  border-color: var(--ink);
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-sm);
+}
+
+.app[data-ui="industrial"] .toast {
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.app[data-ui="industrial"] .modal {
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-lg);
+}
+
+.app[data-ui="industrial"] .shockwave {
+  border-radius: 0;
+  border-width: 3px;
+}
+
+/* ===== B · 霓虹 HUD (neon) =====
+   Dark-native. Chamfered plates, corner brackets, scanlines, mono readouts and
+   the accent used as light rather than as paint. */
+.app[data-ui="neon"] {
+  --radius: 4px;
+  --radius-sm: 4px;
+  --blur: 16px;
+
+  --bg-grad-1: #05070d;
+  --bg-grad-2: #070b14;
+  --surface: rgba(13, 24, 38, 0.72);
+  --surface-solid: #0b1421;
+  --surface2: rgba(17, 30, 47, 0.66);
+  --surface3: rgba(21, 37, 56, 0.55);
+  --glass-border: color-mix(in srgb, var(--accent) 30%, transparent);
+  --text: #dff3ff;
+  --text-soft: #93b3cc;
+  --muted: #5d7d96;
+  --border: color-mix(in srgb, var(--accent) 22%, transparent);
+  --border-strong: color-mix(in srgb, var(--accent) 50%, transparent);
+  --ring-bg: #12202f;
+  --rim: rgba(255, 255, 255, 0.07);
+
+  /* The preset colour has to be lifted even when the system is in light mode,
+     because this skin is always dark. */
+  --accent: color-mix(in srgb, var(--accent-base) 74%, #fff);
+  --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 36%, transparent);
+  --accent-grad: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent));
+
+  --danger: #ff5470;
+  --danger-soft: rgba(255, 84, 112, 0.16);
+  --warning: #ffc44d;
+  --warning-soft: rgba(255, 196, 77, 0.16);
+  --info: #46b7ff;
+
+  --shadow-sm: 0 0 14px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 12px 34px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 20px 54px rgba(0, 0, 0, 0.62);
+
+  background: radial-gradient(130% 95% at 50% -12%, #0b1624, #04060b 62%);
+}
+
+.app[data-ui="neon"] .ambient-a {
+  background: radial-gradient(circle, var(--accent-glow), transparent 70%);
+  filter: blur(62px);
+  opacity: 0.5;
+}
+
+.app[data-ui="neon"] .ambient-b {
+  background: radial-gradient(circle, color-mix(in srgb, var(--info) 42%, transparent), transparent 70%);
+}
+
+.app[data-ui="neon"] .ambient-grid {
+  opacity: 0.34;
+  background-size: 26px 26px;
+  color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.app[data-ui="neon"] .ambient-grain {
+  opacity: 0.05;
+}
+
+/* Scanlines + vignette. Fixed and below the modal/toast layers, so it tints the
+   workspace without ever sitting on top of a dialog the user has to read. */
+.app[data-ui="neon"]::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(190, 235, 255, 0.035) 0 1px, transparent 1px 3px),
+    radial-gradient(125% 105% at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.55));
+}
+
+/* Chamfered plates. `clip-path` also clips box-shadow, so no skin surface tries
+   to glow outwards — the light comes from inset shadows and from the borders. */
+.app[data-ui="neon"] .glass,
+.app[data-ui="neon"] .metric,
+.app[data-ui="neon"] .region,
+.app[data-ui="neon"] .setgroup,
+.app[data-ui="neon"] .settings-tabs,
+.app[data-ui="neon"] .clean-btn,
+.app[data-ui="neon"] .chipbtn,
+.app[data-ui="neon"] .btn-primary,
+.app[data-ui="neon"] .btn-ghost,
+.app[data-ui="neon"] .update-banner,
+.app[data-ui="neon"] .update-banner-btn,
+.app[data-ui="neon"] .toast,
+.app[data-ui="neon"] .modal,
+.app[data-ui="neon"] .statuschip,
+.app[data-ui="neon"] .segmented,
+.app[data-ui="neon"] .tab-pill {
+  border-radius: 0;
+  clip-path: polygon(
+    10px 0,
+    100% 0,
+    100% calc(100% - 10px),
+    calc(100% - 10px) 100%,
+    0 100%,
+    0 10px
+  );
+}
+
+.app[data-ui="neon"] .glass {
+  position: relative;
+  box-shadow: var(--shadow-md), inset 0 0 26px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* Corner brackets — the HUD tell. Drawn as four gradient slivers in `::after`
+   so they scale with the plate and need no extra DOM. */
+.app[data-ui="neon"] .glass::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--accent), var(--accent)) left top / 16px 2px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) left top / 2px 16px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) right bottom / 16px 2px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) right bottom / 2px 16px no-repeat;
+  opacity: 0.8;
+}
+
+.app[data-ui="neon"] .metric-title,
+.app[data-ui="neon"] .panel-title,
+.app[data-ui="neon"] .setgroup-title,
+.app[data-ui="neon"] .gauge-label {
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 10px;
+  color: color-mix(in srgb, var(--accent) 72%, var(--muted));
+}
+
+/* Block marker before a section label. */
+.app[data-ui="neon"] .panel-title::before {
+  content: "";
+  width: 3px;
+  height: 11px;
+  flex-shrink: 0;
+  background: var(--accent);
+  box-shadow: 0 0 9px var(--accent);
+}
+
+.app[data-ui="neon"] .gauge-value,
+.app[data-ui="neon"] .metric-value,
+.app[data-ui="neon"] .setrow-value,
+.app[data-ui="neon"] .panel-count,
+.app[data-ui="neon"] .update-banner-version {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.app[data-ui="neon"] .brand-name {
+  background: none;
+  color: var(--accent);
+  -webkit-text-fill-color: var(--accent);
+  letter-spacing: 2.4px;
+  text-transform: uppercase;
+  text-shadow: 0 0 14px var(--accent-glow);
+  animation: none;
+}
+
+.app[data-ui="neon"] .brand-mark {
+  box-shadow: 0 0 18px var(--accent-glow);
+}
+
+.app[data-ui="neon"] .gauge {
+  background: conic-gradient(
+    from 0deg,
+    color-mix(in srgb, var(--gauge-color) 30%, transparent) 0,
+    var(--gauge-color) calc(var(--gauge-pct) * 1%),
+    rgba(255, 255, 255, 0.06) 0
+  );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent),
+    inset 0 0 26px rgba(0, 0, 0, 0.7);
+}
+
+.app[data-ui="neon"] .gauge::before {
+  inset: -24px;
+  opacity: 1;
+  background: radial-gradient(closest-side, transparent 58%, color-mix(in srgb, var(--gauge-color) 36%, transparent) 100%);
+}
+
+.app[data-ui="neon"] .gauge-ticks {
+  inset: -11px;
+  opacity: 0.55;
+}
+
+.app[data-ui="neon"] .gauge-head-dot {
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  background: #eafcff;
+  box-shadow:
+    0 0 0 2px var(--gauge-color),
+    0 0 24px 5px var(--gauge-color);
+}
+
+.app[data-ui="neon"] .gauge-inner {
+  background: radial-gradient(122% 122% at 50% 14%, #0e1c2c, #05080e);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.75);
+}
+
+.app[data-ui="neon"] .shockwave {
+  box-shadow: 0 0 20px var(--accent);
+}
+
+.app[data-ui="neon"] .bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.app[data-ui="neon"] .bar-fill {
+  background: var(--bar-color);
+  box-shadow: 0 0 13px color-mix(in srgb, var(--bar-color) 70%, transparent);
+}
+
+.app[data-ui="neon"] .metric {
+  background: var(--surface2);
+}
+
+.app[data-ui="neon"] .region.on {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: var(--accent);
+}
+
+.app[data-ui="neon"] .region.on .check {
+  background: var(--accent);
+  color: #041018;
+  box-shadow: 0 0 14px var(--accent-glow);
+}
+
+.app[data-ui="neon"] .clean-btn {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  box-shadow: inset 0 0 24px color-mix(in srgb, var(--accent) 16%, transparent);
+  letter-spacing: 2.4px;
+  text-transform: uppercase;
+}
+
+.app[data-ui="neon"] .clean-btn:hover:not(:disabled) {
+  transform: none;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: inset 0 0 30px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.app[data-ui="neon"] .clean-btn:disabled {
+  opacity: 0.5;
+}
+
+.app[data-ui="neon"] .chipbtn,
+.app[data-ui="neon"] .btn-ghost {
+  background: transparent;
+  color: var(--text-soft);
+  border: 1px solid var(--border);
+}
+
+.app[data-ui="neon"] .chipbtn:hover,
+.app[data-ui="neon"] .btn-ghost:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.app[data-ui="neon"] .btn-primary {
+  background: var(--accent);
+  color: #04121a;
+  border: none;
+  box-shadow: 0 0 20px var(--accent-glow);
+}
+
+.app[data-ui="neon"] .tab-pill,
+.app[data-ui="neon"] .segmented button.active,
+.app[data-ui="neon"] .settings-tabs button.active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 46%, transparent);
+}
+
+.app[data-ui="neon"] .tabs button.active {
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+
+/* ===== C · 终端复古 (terminal) =====
+   Dark-native. Pure black, one phosphor tint (the user's own accent), dashed
+   hairlines, monospace everywhere and block-character progress. */
+.app[data-ui="terminal"] {
+  --radius: 0px;
+  --radius-sm: 0px;
+  --blur: 0px;
+
+  --bg-grad-1: #000000;
+  --bg-grad-2: #000000;
+  --surface: #000000;
+  --surface-solid: #000000;
+  --surface2: #030703;
+  --surface3: #050c06;
+  --glass-border: #1f5c2c;
+  --text: #7df39a;
+  --text-soft: #4fbf68;
+  --muted: #31743f;
+  --border: #1a4a26;
+  --border-strong: #2e7a3d;
+  --ring-bg: #0d2113;
+  --rim: transparent;
+
+  /* Phosphor: the preset pushed most of the way towards white, so the accent is
+     light rather than paint. Amber and cyan terminals come out of this too. */
+  --accent: color-mix(in srgb, var(--accent-base) 52%, #d6ffe0);
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 28%, transparent);
+  --accent-grad: var(--accent);
+
+  --danger: #ff6b6b;
+  --danger-soft: rgba(255, 107, 107, 0.14);
+  --warning: #ffd166;
+  --warning-soft: rgba(255, 209, 102, 0.14);
+  --info: #6bc9ff;
+
+  /* A transparent shadow keeps the `.glass` box-shadow *list* valid (mixed
+     `none, inset ...` would invalidate the whole declaration). */
+  --shadow-sm: 0 0 #0000;
+  --shadow-md: 0 0 #0000;
+  --shadow-lg: 0 0 #0000;
+
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+  background: #000;
+}
+
+.app[data-ui="terminal"] .ambient {
+  display: none;
+}
+
+/* Form controls do not inherit the font in every engine. */
+.app[data-ui="terminal"] button,
+.app[data-ui="terminal"] select,
+.app[data-ui="terminal"] input {
+  font-family: inherit;
+}
+
+.app[data-ui="terminal"] .glass {
+  border: 1px dashed var(--glass-border);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.app[data-ui="terminal"] .metric,
+.app[data-ui="terminal"] .region,
+.app[data-ui="terminal"] .setgroup,
+.app[data-ui="terminal"] .settings-tabs,
+.app[data-ui="terminal"] .settings-body,
+.app[data-ui="terminal"] .toast,
+.app[data-ui="terminal"] .modal,
+.app[data-ui="terminal"] .chipbtn,
+.app[data-ui="terminal"] .btn-primary,
+.app[data-ui="terminal"] .btn-ghost,
+.app[data-ui="terminal"] .update-banner,
+.app[data-ui="terminal"] .update-banner-btn,
+.app[data-ui="terminal"] .segmented,
+.app[data-ui="terminal"] .panel-count {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.app[data-ui="terminal"] .metric,
+.app[data-ui="terminal"] .region,
+.app[data-ui="terminal"] .setgroup {
+  border: 1px dashed var(--glass-border);
+  background: transparent;
+}
+
+.app[data-ui="terminal"] .metric:hover {
+  border-color: var(--accent);
+  transform: none;
+  box-shadow: none;
+}
+
+.app[data-ui="terminal"] .region:hover:not(:disabled) {
+  border-color: var(--accent);
+  transform: none;
+  box-shadow: none;
+}
+
+.app[data-ui="terminal"] .panel-title,
+.app[data-ui="terminal"] .setgroup-title,
+.app[data-ui="terminal"] .metric-title,
+.app[data-ui="terminal"] .gauge-label {
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+}
+
+.app[data-ui="terminal"] .panel-title::before {
+  content: "> ";
+  color: var(--accent);
+}
+
+.app[data-ui="terminal"] .setgroup-title::before {
+  content: "$ ";
+  color: var(--accent);
+}
+
+.app[data-ui="terminal"] .brand-name {
+  background: none;
+  color: var(--accent);
+  -webkit-text-fill-color: var(--accent);
+  letter-spacing: 1.5px;
+  animation: none;
+}
+
+.app[data-ui="terminal"] .metric-value,
+.app[data-ui="terminal"] .setrow-value,
+.app[data-ui="terminal"] .panel-count,
+.app[data-ui="terminal"] .update-banner-version {
+  text-shadow: 0 0 9px var(--accent-glow);
+}
+
+.app[data-ui="terminal"] .brand-mark,
+.app[data-ui="terminal"] .metric-icon {
+  background: transparent;
+  border: 1px dashed var(--glass-border);
+  box-shadow: none;
+}
+
+.app[data-ui="terminal"] .gauge {
+  background: conic-gradient(
+    from 0deg,
+    var(--gauge-color) 0 calc(var(--gauge-pct) * 1%),
+    var(--ring-bg) 0
+  );
+  border: 1px dashed var(--glass-border);
+  box-shadow: none;
+}
+
+.app[data-ui="terminal"] .gauge::before {
+  display: none;
+}
+
+.app[data-ui="terminal"] .gauge-ticks {
+  inset: -7px;
+  opacity: 0.85;
+  background: repeating-conic-gradient(from 0deg, var(--muted) 0 1.5deg, transparent 1.5deg 18deg);
+}
+
+.app[data-ui="terminal"] .gauge-head-dot {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 0;
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.app[data-ui="terminal"] .gauge-inner {
+  background: #000;
+  border: 1px dashed var(--glass-border);
+  box-shadow: none;
+}
+
+.app[data-ui="terminal"] .gauge-value {
+  letter-spacing: 1.5px;
+  text-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* Blinking cursor after the live reading. */
+.app[data-ui="terminal"] .gauge-value::after {
+  content: "_";
+  animation: term-blink 1.05s steps(1, end) infinite;
+}
+
+@keyframes term-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.app[data-ui="terminal"] .shockwave {
+  border-radius: 0;
+  border-style: dashed;
+}
+
+/* Block-character level bars: `[####------]`, as text. `attr()` picks up the
+   string `MetricCard` writes into `data-bar`, so no extra DOM is needed and the
+   bar still works normally under every other skin. */
+.app[data-ui="terminal"] .bar[data-bar] {
+  height: auto;
+  background: none;
+  overflow: visible;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  text-shadow: 0 0 7px var(--accent-glow);
+}
+
+.app[data-ui="terminal"] .bar[data-bar] > .bar-fill {
+  display: none;
+}
+
+.app[data-ui="terminal"] .bar[data-bar]::after {
+  content: attr(data-bar);
+  white-space: pre;
+}
+
+.app[data-ui="terminal"] .region.on {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: var(--accent);
+}
+
+.app[data-ui="terminal"] .region .check {
+  border: 1px dashed var(--border-strong);
+}
+
+.app[data-ui="terminal"] .region.on .check {
+  background: var(--accent);
+  border-style: solid;
+  border-color: var(--accent);
+  color: #00140a;
+  box-shadow: none;
+  transform: none;
+}
+
+.app[data-ui="terminal"] .clean-btn {
+  background: transparent;
+  color: var(--accent);
+  border: 1px dashed var(--accent);
+  box-shadow: none;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-weight: 700;
+}
+
+.app[data-ui="terminal"] .clean-btn::after {
+  display: none;
+}
+
+.app[data-ui="terminal"] .clean-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  transform: none;
+  box-shadow: none;
+}
+
+.app[data-ui="terminal"] .chipbtn,
+.app[data-ui="terminal"] .btn-ghost {
+  background: transparent;
+  border: 1px dashed var(--glass-border);
+  color: var(--accent);
+}
+
+.app[data-ui="terminal"] .btn-primary {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+.app[data-ui="terminal"] .tabs,
+.app[data-ui="terminal"] .statuschip,
+.app[data-ui="terminal"] .panel-count {
+  border-style: dashed;
+}
+
+.app[data-ui="terminal"] .statuschip .dot {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.app[data-ui="terminal"] .tab-pill,
+.app[data-ui="terminal"] .segmented button.active,
+.app[data-ui="terminal"] .settings-tabs button.active {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.app[data-ui="terminal"] .tabs button.active {
+  color: var(--accent);
+  text-shadow: 0 0 9px var(--accent-glow);
+}
+
+.app[data-ui="terminal"] .swatch {
+  border-radius: 0;
+}
+
+.app[data-ui="terminal"] .swatch.active {
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+/* ===== D · 静音极简 (minimal) =====
+   Generous space, hairlines instead of boxes, one accent, and almost no motion:
+   the decoration the other skins rely on is switched off rather than restyled. */
+.app[data-ui="minimal"] {
+  --radius: 22px;
+  --radius-sm: 14px;
+  --blur: 0px;
+
+  --bg-grad-1: #fbfbfc;
+  --bg-grad-2: #f3f4f6;
+  --surface: #ffffff;
+  --surface-solid: #ffffff;
+  --surface2: #ffffff;
+  --surface3: #f7f8fa;
+  --glass-border: rgba(16, 24, 40, 0.07);
+  --text: #14171c;
+  --text-soft: #5a6472;
+  --muted: #98a1ae;
+  --border: rgba(16, 24, 40, 0.07);
+  --border-strong: rgba(16, 24, 40, 0.18);
+  --ring-bg: #eef0f3;
+  --rim: transparent;
+
+  --accent-grad: var(--accent);
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 16px 40px -24px rgba(16, 24, 40, 0.4);
+  --shadow-lg: 0 34px 70px -34px rgba(16, 24, 40, 0.5);
+
+  background: linear-gradient(180deg, var(--bg-grad-1), var(--bg-grad-2));
+}
+
+.app[data-ui="minimal"].dark {
+  --bg-grad-1: #0c0d0f;
+  --bg-grad-2: #121316;
+  --surface: #141518;
+  --surface-solid: #16171a;
+  --surface2: #15161a;
+  --surface3: #1a1b1f;
+  --glass-border: rgba(255, 255, 255, 0.07);
+  --text: #ecedf0;
+  --text-soft: #a2a8b3;
+  --muted: #6d7480;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --ring-bg: #23252a;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 22px 48px -26px rgba(0, 0, 0, 0.8);
+  --shadow-lg: 0 44px 84px -42px rgba(0, 0, 0, 0.9);
+}
+
+/* Silence the decoration this skin is defined by *not* having. */
+.app[data-ui="minimal"] .ambient,
+.app[data-ui="minimal"] .bar-fill::after,
+.app[data-ui="minimal"] .press-ring,
+.app[data-ui="minimal"] [data-spot]::before,
+.app[data-ui="minimal"] .gauge::before,
+.app[data-ui="minimal"] .gauge-ticks,
+.app[data-ui="minimal"] .shockwave,
+.app[data-ui="minimal"] .clean-btn::after {
+  display: none;
+}
+
+.app[data-ui="minimal"] .glass {
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.app[data-ui="minimal"] .brand-name {
+  background: none;
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+  letter-spacing: -0.3px;
+  font-weight: 600;
+  animation: none;
+}
+
+/* Cards lose their boxes: separation comes from the hairline and the gap. */
+.app[data-ui="minimal"] .metric,
+.app[data-ui="minimal"] .region {
+  background: transparent;
+  box-shadow: none;
+}
+
+.app[data-ui="minimal"] .metric:hover,
+.app[data-ui="minimal"] .region:hover:not(:disabled) {
+  transform: none;
+  background: var(--surface3);
+  border-color: var(--border-strong);
+  box-shadow: none;
+}
+
+.app[data-ui="minimal"] .metric-icon {
+  background: transparent;
+  color: var(--text-soft);
+}
+
+.app[data-ui="minimal"] .metric-title,
+.app[data-ui="minimal"] .setgroup-title {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+/* A thin, precise ring: the band is the gap between `.gauge` and `.gauge-inner`. */
+.app[data-ui="minimal"] .gauge {
+  width: 128px;
+  height: 128px;
+  background: conic-gradient(
+    from 0deg,
+    var(--gauge-color) 0 calc(var(--gauge-pct) * 1%),
+    var(--ring-bg) 0
+  );
+  box-shadow: none;
+}
+
+.app[data-ui="minimal"] .gauge-inner {
+  width: 118px;
+  height: 118px;
+  /* Opaque on purpose: with a transparent centre the whole conic gradient would
+     show through and the "thin ring" would be a filled disc. */
+  background: var(--surface);
+  border: none;
+  box-shadow: none;
+}
+
+.app[data-ui="minimal"] .gauge-head-dot {
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  background: var(--surface-solid);
+  box-shadow: 0 0 0 1.5px var(--gauge-color);
+}
+
+.app[data-ui="minimal"] .gauge-value {
+  font-size: 31px;
+  font-weight: 600;
+  letter-spacing: -1.6px;
+}
+
+.app[data-ui="minimal"] .bar,
+.app[data-ui="minimal"] .bar-fill {
+  height: 3px;
+  border-radius: 2px;
+}
+
+.app[data-ui="minimal"] .bar-fill {
+  background: var(--bar-color);
+  box-shadow: none;
+}
+
+.app[data-ui="minimal"] .clean-btn {
+  background: var(--accent);
+  box-shadow: none;
+  border-radius: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.app[data-ui="minimal"] .clean-btn:hover:not(:disabled) {
+  transform: none;
+  box-shadow: var(--shadow-md);
+}
+
+.app[data-ui="minimal"] .chipbtn,
+.app[data-ui="minimal"] .btn-ghost,
+.app[data-ui="minimal"] .btn-primary {
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.app[data-ui="minimal"] .btn-primary {
+  background: var(--accent);
+}
+
+.app[data-ui="minimal"] .tabs,
+.app[data-ui="minimal"] .settings-tabs {
+  box-shadow: none;
+}
+
+.app[data-ui="minimal"] .tab-pill,
+.app[data-ui="minimal"] .segmented button.active,
+.app[data-ui="minimal"] .settings-tabs button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.app[data-ui="minimal"] .segmented {
+  background: transparent;
+}
+
+.app[data-ui="minimal"] .statuschip {
+  background: transparent;
+}
+
+/* ============================================================
+   Style picker
+   ============================================================
+
+   The gallery in Settings → Appearance. Each card carries a pure-CSS miniature
+   of its skin so the choice is made by looking rather than by reading a name —
+   which is the entire point of shipping four of them.
+
+   The thumbnails deliberately do *not* follow the active skin: they have to
+   render their own palette to be a preview, so they set `--p-*` locally and
+   ignore the tokens above. `--p-acc` stays on the live `--accent` so a card also
+   previews how the current accent colour sits inside that style.
+   ------------------------------------------------------------------------ */
+
+.setblock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.setblock:last-child {
+  border-bottom: none;
+}
+
+.style-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px;
+}
+
+.style-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.style-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.style-card.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.style-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.style-thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 42px;
+  overflow: hidden;
+
+  --p-bg: #ffffff;
+  --p-line: #e3e6ea;
+  --p-acc: var(--accent);
+  --p-radius: 8px;
+  --p-border: 1px solid rgba(16, 24, 40, 0.1);
+
+  background: var(--p-bg);
+  border: var(--p-border);
+  border-radius: var(--p-radius);
+}
+
+.style-thumb[data-p="glass"] {
+  --p-bg: linear-gradient(155deg, #e9f0fa, #ffffff 70%);
+  --p-line: #d9e2ec;
+  --p-radius: 8px;
+  --p-border: 1px solid rgba(255, 255, 255, 0.9);
+}
+
+.style-thumb[data-p="industrial"] {
+  --p-bg: #f4f1e8;
+  --p-line: #cfc9b6;
+  --p-radius: 0px;
+  --p-border: 2px solid #141414;
+}
+
+.style-thumb[data-p="neon"] {
+  --p-bg: radial-gradient(120% 130% at 50% 0%, #0c1a29, #05080e);
+  --p-line: #17293c;
+  --p-radius: 3px;
+  --p-border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.style-thumb[data-p="terminal"] {
+  --p-bg: #000000;
+  --p-line: #123a1c;
+  --p-radius: 0px;
+  --p-border: 1px dashed #2f7a41;
+}
+
+.style-thumb[data-p="minimal"] {
+  --p-bg: #ffffff;
+  --p-line: #eceef1;
+  --p-radius: 9px;
+  --p-border: 1px solid rgba(16, 24, 40, 0.09);
+}
+
+.st-ring,
+.st-bar,
+.st-btn {
+  position: absolute;
+  display: block;
+}
+
+.st-ring {
+  left: 8px;
+  top: 7px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: conic-gradient(var(--p-acc) 0 60%, var(--p-line) 0);
+}
+
+.style-thumb[data-p="industrial"] .st-ring,
+.style-thumb[data-p="terminal"] .st-ring {
+  border-radius: 0;
+}
+
+.st-bar {
+  left: 42px;
+  top: 11px;
+  right: 10px;
+  height: 4px;
+  background: var(--p-line);
+  border-radius: var(--p-radius);
+}
+
+.st-bar i {
+  display: block;
+  width: 62%;
+  height: 100%;
+  background: var(--p-acc);
+  border-radius: inherit;
+}
+
+.st-bar2 {
+  top: 20px;
+  right: 24px;
+}
+
+.st-bar2 i {
+  width: 45%;
+}
+
+.st-btn {
+  left: 42px;
+  top: 29px;
+  width: 44px;
+  height: 9px;
+  background: var(--p-acc);
+  border-radius: var(--p-radius);
+}
+
+.style-thumb[data-p="terminal"] .st-bar,
+.style-thumb[data-p="terminal"] .st-btn,
+.style-thumb[data-p="terminal"] .st-bar i {
+  border-radius: 0;
+}
+
+.style-thumb[data-p="terminal"] .st-btn {
+  background: transparent;
+  border: 1px dashed var(--p-acc);
+}
+
+/* Badge on the dark-native skins, so "this one ignores the theme setting" is
+   visible before the user picks it rather than after. */
+.style-darkdot {
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--p-acc);
+  opacity: 0.75;
+}
+
+.style-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.style-desc {
+  font-size: 9.5px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.segmented button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ===== Accessibility: honour "reduce motion" =====
    Covers the CSS animations above as well as the existing transitions; the JS
    animations (gauge tween, spark) check the same media query themselves. */

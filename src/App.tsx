@@ -35,6 +35,7 @@ import {
 } from "./regions";
 import { SUPPORTED_LANGUAGES, normalizeLanguage } from "./i18n";
 import { ACCENTS, accentByKey } from "./accents";
+import { UI_STYLES, uiStyleByKey } from "./uiStyles";
 import {
   IconBell,
   IconBolt,
@@ -100,6 +101,18 @@ function pressureColor(percent: number, warnLevel: number, dangerLevel: number):
 /** Default thresholds, matching `Config::default()` on the Rust side. */
 const DEFAULT_WARN_LEVEL = 70;
 const DEFAULT_DANGER_LEVEL = 90;
+
+/**
+ * Text form of a level bar, for the terminal skin: `[####------]`.
+ *
+ * Written unconditionally into `data-bar` (it is one short string per card) and
+ * revealed by CSS only under `[data-ui="terminal"]`, which keeps the bar markup
+ * skin-agnostic instead of threading the active skin down into `MetricCard`.
+ */
+function blockBar(percent: number, cells = 18): string {
+  const filled = Math.max(0, Math.min(cells, Math.round((percent / 100) * cells)));
+  return `[${"#".repeat(filled)}${"-".repeat(cells - filled)}]`;
+}
 
 /** Result of the most recent update check, shown on the About page. */
 interface CheckOutcome {
@@ -510,6 +523,10 @@ export default function App() {
     () => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false
   );
   const [resolvedDark, setResolvedDark] = useState<boolean>(false);
+  // The active skin. `config.ui_style` may point at a key this build no longer
+  // ships (a downgrade, or a hand-edited config), so it always goes through the
+  // registry rather than straight into the DOM.
+  const uiStyle = uiStyleByKey(config?.ui_style);
   /** All decorative motion is skipped when the OS asks for reduced motion. */
   const reduceMotion = usePrefersReducedMotion();
 
@@ -529,9 +546,12 @@ export default function App() {
     else if (theme === "dark") dark = true;
     // Legacy fallback for old configs without a `theme` field.
     else if (config && config.use_dark_theme && theme === "system") dark = true;
+    // A dark-native skin overrides the mode rather than rewriting `theme`, so
+    // the user's light/dark choice survives switching away and back.
+    if (uiStyle.mode === "dark") dark = true;
     setResolvedDark(dark);
     document.body.classList.toggle("dark", dark);
-  }, [config?.theme, config?.use_dark_theme, systemDark]);
+  }, [config?.theme, config?.use_dark_theme, systemDark, uiStyle.mode]);
 
   // Apply the accent color preset. Only the base colour is injected; every
   // derived tone is computed from it in styles.css.
@@ -922,7 +942,7 @@ export default function App() {
   // change that resizes the labels).
   const { navRef, pill } = useSlidingTab(tab === "main" ? 0 : 1);
   return (
-    <div className={`app ${resolvedDark ? "dark" : ""}`} ref={appRef}>
+    <div className={`app ${resolvedDark ? "dark" : ""}`} data-ui={uiStyle.key} ref={appRef}>
       {/* Ambient depth layer: two slowly drifting soft lights behind a faint dot
           grid. Transform-only animation, so it stays on the compositor — the
           point is to stop the window looking flat, not to cost CPU in a process
@@ -1271,7 +1291,7 @@ function MetricCard({
         <div className="metric-sub">
           {t("main.of")} {obj ? formatBytes(obj.total_bytes) : "—"} · {pct}%
         </div>
-        <div className="bar">
+        <div className="bar" data-bar={blockBar(pct)}>
           <div className={barClass} style={{ width: `${pct}%` }} />
         </div>
       </div>
@@ -1335,6 +1355,58 @@ function RegionCard({
 }
 
 type Section = "general" | "memory" | "appearance" | "tray" | "about";
+
+/**
+ * Skin gallery.
+ *
+ * Each card renders a miniature of its style, so the choice is made by looking
+ * at it instead of by reading a name — which is the entire point of shipping
+ * four visual languages. The thumbnails are pure CSS and keep `--p-acc` on the
+ * live accent colour, so a card also previews how the current accent sits
+ * inside that style.
+ */
+function StylePicker({
+  value,
+  t,
+  onChange,
+}: {
+  value: string;
+  t: (k: string) => string;
+  onChange: (key: string) => void;
+}) {
+  const darkOnlyHint = t("settings.styleDarkOnly");
+  return (
+    <div className="style-picker" role="radiogroup" aria-label={t("settings.uiStyle")}>
+      {UI_STYLES.map((s) => (
+        <button
+          key={s.key}
+          type="button"
+          role="radio"
+          aria-checked={value === s.key}
+          className={`style-card ${value === s.key ? "active" : ""}`}
+          onClick={() => onChange(s.key)}
+          title={t(s.descKey)}
+        >
+          <span className="style-thumb" data-p={s.key} aria-hidden="true">
+            {/* Marks the skins that ignore the light/dark setting, so that is
+                discoverable before picking one rather than after. */}
+            {s.mode === "dark" && <span className="style-darkdot" title={darkOnlyHint} />}
+            <span className="st-ring" />
+            <span className="st-bar">
+              <i />
+            </span>
+            <span className="st-bar st-bar2">
+              <i />
+            </span>
+            <span className="st-btn" />
+          </span>
+          <span className="style-name">{t(s.nameKey)}</span>
+          <span className="style-desc">{t(s.descKey)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /**
  * Settings panel.
@@ -1469,6 +1541,27 @@ const SettingsPanel = memo(function SettingsPanel({
     });
   };
 
+  /**
+   * Apply a *discrete* choice without waiting out the debounce above.
+   *
+   * The debounce exists for sliders, which fire on every pixel of movement. A
+   * skin switch is a single click that repaints the entire window, and 300 ms of
+   * stale layout is long enough to read as "the click did nothing". This writes
+   * the draft and saves immediately, cancelling any pending debounced save (the
+   * draft it would have written is already folded into `next`).
+   */
+  const setNow = <K extends keyof Config>(k: K, v: Config[K]) => {
+    const next = { ...draft, [k]: v };
+    setDraft(next);
+    pendingSave.current = next;
+    if (saveTimer.current !== null) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    pendingSave.current = null;
+    onSaveRef.current(next);
+  };
+
   // Single "Check for updates" flow: check → if a new version exists, download
   // and install it in the background, then the app restarts automatically.
   // The GitHub endpoint is slow/unstable (measured 3–14s+ on this network), so
@@ -1507,6 +1600,9 @@ const SettingsPanel = memo(function SettingsPanel({
       setUpdatePhase("idle");
     }
   };
+
+  /** Dark-native skins pin the mode, so the theme control has to say so. */
+  const styleIsDarkOnly = uiStyleByKey(draft.ui_style).mode === "dark";
 
   const sections: { id: Section; icon: React.ReactNode }[] = [
     { id: "general", icon: <IconSettings size={14} /> },
@@ -1583,6 +1679,19 @@ const SettingsPanel = memo(function SettingsPanel({
 
           {section === "appearance" && (
             <>
+              {/* The skin comes first: it changes more of the window than the
+                  light/dark switch below it, and it can disable that switch. */}
+              <div className="setblock">
+                <span className="setrow-label">
+                  <span className="icon"><IconPalette size={15} /></span>
+                  {t("settings.uiStyle")}
+                </span>
+                <StylePicker
+                  value={draft.ui_style}
+                  t={t}
+                  onChange={(k) => setNow("ui_style", k)}
+                />
+              </div>
               <div className="setrow">
                 <span className="setrow-label">
                   <span className="icon"><IconPalette size={15} /></span>
@@ -1595,12 +1704,14 @@ const SettingsPanel = memo(function SettingsPanel({
                       className={draft.theme === th ? "active" : ""}
                       onClick={() => set("theme", th)}
                       type="button"
+                      disabled={styleIsDarkOnly}
                     >
                       {t(`settings.theme_${th}`)}
                     </button>
                   ))}
                 </div>
               </div>
+              {styleIsDarkOnly && <div className="hint">{t("settings.styleDarkOnly")}</div>}
               <div className="setrow">
                 <span className="setrow-label">
                   <span className="icon"><IconPalette size={15} /></span>

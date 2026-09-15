@@ -79,6 +79,8 @@
     "theme_light": "Light",
     "theme_dark": "Dark",
     "theme_system": "System",
+    "uiStyle": "Interface style",
+    "styleDarkOnly": "This style is dark-only, so the theme setting above has no effect while it is selected.",
     "autoReduct": "Auto-reduct by usage",
     "autoReductThreshold": "Auto-reduct threshold (%)",
     "autoReductInterval": "Auto-reduct by interval",
@@ -126,6 +128,18 @@
   "about": {
     "website": "Project page",
     "license": "Open source under the GPL-3.0 license."
+  },
+  "style": {
+    "glass": "Glass",
+    "glassDesc": "Frosted translucent panels and soft light",
+    "industrial": "Industrial",
+    "industrialDesc": "Square corners, heavy outlines, hard shadows",
+    "neon": "Neon HUD",
+    "neonDesc": "Chamfered panels, scanlines and neon glow",
+    "terminal": "Terminal",
+    "terminalDesc": "Black, phosphor monospace, block progress",
+    "minimal": "Minimal",
+    "minimalDesc": "Whitespace, hairline borders, near-silent motion"
   },
   "accent": {
     "green": "Green",

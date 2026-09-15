@@ -84,6 +84,8 @@
     "theme_light": "浅色",
     "theme_dark": "深色",
     "theme_system": "跟随系统",
+    "uiStyle": "界面风格",
+    "styleDarkOnly": "该风格仅提供深色配色，主题设置暂时不生效。",
     "autoReduct": "按占用率自动清理",
     "autoReductThreshold": "自动清理阈值(%)",
     "autoReductInterval": "按间隔自动清理",
@@ -126,6 +128,18 @@
     "standbyPriority0": "低优先级待机列表",
     "registryCache": "注册表缓存",
     "combineMemoryLists": "合并内存列表"
+  },
+  "style": {
+    "glass": "玻璃拟态",
+    "glassDesc": "半透明磨砂面板与柔和光影",
+    "industrial": "硬边工业",
+    "industrialDesc": "直角硬边、实心描边与硬投影",
+    "neon": "霓虹 HUD",
+    "neonDesc": "切角面板、扫描线与霓虹辉光",
+    "terminal": "终端复古",
+    "terminalDesc": "纯黑底、荧光等宽字与块状进度",
+    "minimal": "静音极简",
+    "minimalDesc": "大留白、发丝描边与克制的动效"
   },
   "accent": {
     "green": "绿",

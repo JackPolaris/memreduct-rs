@@ -79,6 +79,8 @@
     "theme_light": "淺色",
     "theme_dark": "深色",
     "theme_system": "跟隨系統",
+    "uiStyle": "介面風格",
+    "styleDarkOnly": "此風格僅提供深色配色，主題設定暫時不生效。",
     "autoReduct": "按使用率自動清理",
     "autoReductThreshold": "自動清理臨界值(%)",
     "autoReductInterval": "按時間間隔自動清理",
@@ -126,6 +128,18 @@
   "about": {
     "website": "專案主頁",
     "license": "本專案基於 GPL-3.0 許可開源。"
+  },
+  "style": {
+    "glass": "玻璃擬態",
+    "glassDesc": "半透明霧面面板與柔和光影",
+    "industrial": "硬邊工業",
+    "industrialDesc": "直角硬邊、實心描邊與硬投影",
+    "neon": "霓虹 HUD",
+    "neonDesc": "切角面板、掃描線與霓虹輝光",
+    "terminal": "終端復古",
+    "terminalDesc": "純黑底、螢光等寬字與塊狀進度",
+    "minimal": "靜音極簡",
+    "minimalDesc": "大留白、髮絲描邊與克制的動效"
   },
   "accent": {
     "green": "綠",

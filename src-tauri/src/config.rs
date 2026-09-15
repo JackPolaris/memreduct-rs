@@ -24,6 +24,13 @@ pub struct Config {
     pub show_reduct_confirmation: bool,
     // Theme: "light" | "dark" | "system"
     pub theme: String,
+    // UI skin ("glass" | "industrial" | "neon" | "terminal" | "minimal").
+    //
+    // Orthogonal to `theme`: the skin is the *visual language* (shape, density,
+    // typography, effects) while `theme` only picks a light or dark palette of
+    // it. Some skins are dark-native (`neon`, `terminal`) and pin the mode at
+    // render time instead of writing back to `theme`.
+    pub ui_style: String,
     // Accent color preset key (e.g. "green", "purple", "blue", ...).
     pub accent_color: String,
     // Legacy dark-theme flag (kept for migration from older configs).
@@ -70,6 +77,12 @@ pub struct Config {
 /// Theme values accepted by the UI (`light` | `dark` | `system`).
 pub const THEMES: [&str; 3] = ["light", "dark", "system"];
 
+/// UI skin keys — MUST stay in sync with `src/uiStyles.ts`.
+///
+/// The first entry is the default, which is also what a config written by an
+/// older build falls back to (its missing `ui_style` deserialises to `""`).
+pub const UI_STYLES: [&str; 5] = ["glass", "industrial", "neon", "terminal", "minimal"];
+
 /// Accent preset keys — MUST stay in sync with `src/accents.ts`.
 pub const ACCENT_KEYS: [&str; 7] = ["green", "purple", "blue", "orange", "red", "cyan", "pink"];
 
@@ -92,6 +105,9 @@ impl Config {
     pub fn sanitize(&mut self) {
         if !THEMES.contains(&self.theme.as_str()) {
             self.theme = "system".into();
+        }
+        if !UI_STYLES.contains(&self.ui_style.as_str()) {
+            self.ui_style = "glass".into();
         }
         if !ACCENT_KEYS.contains(&self.accent_color.as_str()) {
             self.accent_color = "green".into();
@@ -151,6 +167,7 @@ impl Default for Config {
             start_minimized: false,
             show_reduct_confirmation: true,
             theme: "system".into(),
+            ui_style: "glass".into(),
             accent_color: "green".into(),
             use_dark_theme: false,
             language: "zh-CN".into(),
@@ -371,5 +388,31 @@ mod tests {
         assert_eq!(c.reduct_mask, crate::memory::mask::ALL);
         assert_eq!(c.tray_action_dc, TRAY_ACTION_SHOW);
         assert_eq!(c.hotkey_clean, DEFAULT_HOTKEY_CLEAN);
+    }
+
+    #[test]
+    fn ui_style_defaults_and_is_validated() {
+        // An older config has no `ui_style` field at all. `#[serde(default)]`
+        // fills it from `Config::default()`, so the original look comes back
+        // before `sanitize()` is even involved.
+        let c: Config = serde_json::from_str(r#"{"theme":"dark"}"#).unwrap();
+        assert_eq!(c.ui_style, "glass");
+
+        // A skin key that is not shipped must not reach the DOM as a selector.
+        let mut c = Config {
+            ui_style: "glass; } body { display: none".into(),
+            ..Config::default()
+        };
+        c.sanitize();
+        assert_eq!(c.ui_style, "glass");
+
+        for key in UI_STYLES {
+            let mut c = Config {
+                ui_style: key.into(),
+                ..Config::default()
+            };
+            c.sanitize();
+            assert_eq!(c.ui_style, key);
+        }
     }
 }

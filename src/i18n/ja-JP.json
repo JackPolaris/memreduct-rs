@@ -79,6 +79,8 @@
     "theme_light": "ライト",
     "theme_dark": "ダーク",
     "theme_system": "システム",
+    "uiStyle": "インターフェーススタイル",
+    "styleDarkOnly": "このスタイルはダーク配色のみのため、上のテーマ設定は反映されません。",
     "autoReduct": "使用率で自動クリーン",
     "autoReductThreshold": "自動クリーンしきい値(%)",
     "autoReductInterval": "間隔で自動クリーン",
@@ -126,6 +128,18 @@
   "about": {
     "website": "プロジェクトページ",
     "license": "このプロジェクトは GPL-3.0 ライセンスでオープンソース公開されています。"
+  },
+  "style": {
+    "glass": "グラス",
+    "glassDesc": "半透明のすりガラスと柔らかな光",
+    "industrial": "インダストリアル",
+    "industrialDesc": "直角・太い輪郭・硬い影",
+    "neon": "ネオンHUD",
+    "neonDesc": "面取りパネル・走査線・ネオンの輝き",
+    "terminal": "ターミナル",
+    "terminalDesc": "黒背景・蛍光等幅・ブロック進捗",
+    "minimal": "ミニマル",
+    "minimalDesc": "余白・ヘアライン罫線・静かな動き"
   },
   "accent": {
     "green": "グリーン",
