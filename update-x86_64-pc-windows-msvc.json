@@ -1,11 +1,11 @@
 {
-  "version": "3.5.18",
-  "notes": "Mem Reduct 3.5.18\n\n- 界面语言 4 种 → 16 种：在简中/繁中/英/日之外新增 韩语、德语、法语、西班牙语、葡萄牙语（巴西）、意大利语、俄语、波兰语、土耳其语、越南语、泰语、印尼语，每种 121 条文案全部翻译。语言列表只收录真正带翻译包的语言，不会再出现\"选了某种语言却静默回落成中文\"的情况\n- 安装程序多语言，且可选择程序语言：安装界面提供 16 种语言，未手动选择时跟随系统语言（系统语言不在列表内则回退英语）；安装时选择的语言会由安装器写入注册表，程序首次启动时读取并作为界面语言。README 里说的 \"跟随系统语言\"从此真的成立，而不再只靠浏览器 locale 猜\n- 安装器的\"记住语言\"其实是空的：Tauri 的 NSIS 模板声明了语言选择器的注册表位置（`MUI_LANGDLL_REGISTRY_*`）却从不写回 —— 唯一会写它的 `MUI_LANGDLL_SAVELANGUAGE` 宏模板里从未插入，于是那个值永远是空的。这带来两个后果：安装器永远记不住选择；而且这个模态选择框只在 `/S` 静默模式下才会被跳过，自动更新用的却是 `/P`（被动模式），每次后台更新都会弹出一个语言选择框，点\"取消\"还会直接中止整次安装。现在在 `NSIS_HOOK_POSTINSTALL` 钩子里补上写回，安装器从此只在首次询问\n- `displayLanguageSelector` 的 4 种语言会被静默丢弃：Tauri 官方只带了 21 种安装界面译文，波兰语/越南语/泰语/印尼语不在其中。列出却没有对应 `.nsh` 时 Tauri 只打一条 `log::warn!`，既不报错也不中断构建，该语言会从安装包里悄悄消失。这 4 种的自定义译文文件已补齐\n- 语言一致性改由单元测试守着：`installer_lang.rs` 双向校验 `LANGUAGES` 与安装器 LCID 映射表，防止「加了界面语言却忘了安装器映射」导致安装时的选择被静默忽略，也防止映射表里留下已删除的语言\n- 已知限制：从 ≤v3.5.17 升级的用户，第一次自动更新仍会看到一次语言选择框 —— 写回注册表的代码在旧版本里不存在，这一次之后就不再出现",
-  "pub_date": "2026-09-16T09:47:46Z",
+  "version": "3.5.19",
+  "notes": "Mem Reduct 3.5.19\n\n- 用电池供电时开机自启不生效，拔掉电源还会被强杀：计划任务是用 `schtasks /create` 建的，而这个命令没有任何电源相关开关，于是 Task Scheduler 的两个默认值一路生效 —— 用电池开机时任务根本不启动，运行中切到电池供电则直接终止进程。改为由 XML 定义任务，显式关掉这两项\n- 常驻进程 72 小时后被强杀：`schtasks /create` 还留下了默认的 `ExecutionTimeLimit`（72 小时）。一个\"开机就挂着\"的托盘程序三天后会被 Task Scheduler 结束。XML 里改为 `PT0S`（无限制），并补上 `StartWhenAvailable`，让错过的登录启动能补跑\n- 自启开关会撒谎：判断依据只是\"有没有同名任务\"，从不看它指向谁。换过安装目录后残留的旧任务会让开关显示\"已开启\"，而开机什么都不会启动。现在任务的目标路径由程序自己记录，指向他处时不计为开启，并给出一条提示说明关掉再打开即可修复\n- 卸载不清理计划任务：卸载器只删安装目录，任务留在系统里，此后每次登录都会尝试启动一个已经不存在的 exe。已加卸载钩子\n- 设置自启失败时没有任何反馈：提权助手是独立进程、启动后立刻退出，它做成了没有也不知道，前端只能靠轮询猜，失败时开关静默弹回。现在助手把结果写回注册表，设置界面据此给出真实原因（UAC 被取消 / 任务创建失败）\n- 开关状态抖动：轮询原本只在\"任务存在\"时提前结束，关闭自启时必跑满 6 秒；且开启时首轮常早于提权助手完成，读到旧值会让开关先跳回去再跳回来。现在以 \"读到期望状态且助手已回执\"为收敛条件",
+  "pub_date": "2026-09-16T10:49:33Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TXVqTTJSMjd2Rlg0SUJPcm85VDJkQXBKbDFiTC9FUmxQSXUxNy8xOFV6bFNkSWhDM0hqMUdxNno4WlNZakJDUVZXUDJSR0tHKzZRRXdsMjk2TThPNGdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NTUyMDY0CWZpbGU6TWVtIFJlZHVjdF8zLjUuMThfeDY0LXNldHVwLmV4ZQp4VkZqeTlaWXVZS0NOZTJSNjNUMlV6ZGUxSEVwZFUrUVpqWnVybmFzazFpTkN4b2lzTHUwYmI5SnlNNTAramtCRk1YVWIrRERqaEZCQldJcGQxQVFEQT09Cg==",
-      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.18/Mem.Reduct_3.5.18_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TXEva2NNKzBaRmtjYjdIVUtIT3R6cHNDNWM2VTN3VUpFVmJ0MHJ5OXF3QWJ3aTRKQ3ZaL2tBVTNMVTRjSEhrMzZLMkltd2JlSHBoaWdJQk5LWkw4bndJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NTU1NzcxCWZpbGU6TWVtIFJlZHVjdF8zLjUuMTlfeDY0LXNldHVwLmV4ZQpFeXRBOW9DcGdydklkV2M0OXE5dy92WDJ3dzYzZTl1SXRJR2hsS0FuMU9zb2gwQ1V4L2pheTAxRzRjQ24xUFM3ODI1ODRGS1dTalJPVm1zS3VrQUpBdz09Cg==",
+      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.19/Mem.Reduct_3.5.19_x64-setup.exe"
     }
   }
 }
