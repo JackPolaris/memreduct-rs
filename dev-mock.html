@@ -318,6 +318,25 @@
                 ` h=${rs.height} appearance=${rs.appearance}` +
                 ` bg=${rs.backgroundImage.slice(0, 80)}`;
             }
+            // Gauge-dot probe: the cap must sit on the ring band's centreline —
+            // distance from the dial centre = (outer + inner radius) / 2, angle =
+            // the arc's end angle. Eyeballing a 2-3px offset in a screenshot is
+            // unreliable; measure instead. All values are CSS px.
+            const dot = document.querySelector(".gauge-head-dot");
+            const dial = document.querySelector(".gauge");
+            const inner = document.querySelector(".gauge-inner");
+            if (dot && dial && inner) {
+              const dr = dot.getBoundingClientRect();
+              const gr = dial.getBoundingClientRect();
+              const cx = gr.left + gr.width / 2;
+              const cy = gr.top + gr.height / 2;
+              const dist = Math.hypot(dr.left + dr.width / 2 - cx, dr.top + dr.height / 2 - cy);
+              const bandMid = (gr.width / 2 + inner.getBoundingClientRect().width / 2) / 2;
+              const ang = ((Math.atan2(dr.top + dr.height / 2 - cy, dr.left + dr.width / 2 - cx) * 180) / Math.PI + 90 + 360) % 360;
+              pre.textContent +=
+                `\ngauge-dot r=${dist.toFixed(1)} (band中线=${bandMid.toFixed(1)})` +
+                ` angle=${ang.toFixed(1)}° (弧终点=${dial.style.getPropertyValue("--gauge-pct").trim() * 3.6}°)`;
+            }
             document.body.appendChild(pre);
           }, 2600);
         }
