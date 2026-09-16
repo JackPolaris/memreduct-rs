@@ -87,8 +87,15 @@ pub const UI_STYLES: [&str; 5] = ["glass", "industrial", "neon", "terminal", "mi
 pub const ACCENT_KEYS: [&str; 7] = ["green", "purple", "blue", "orange", "red", "cyan", "pink"];
 
 /// Locales that actually ship a translation bundle — MUST stay in sync with
-/// `src/i18n/index.ts`.
-pub const LANGUAGES: [&str; 4] = ["zh-CN", "zh-TW", "en-US", "ja-JP"];
+/// `SUPPORTED_LANGUAGES` in `src/i18n/index.ts`.
+///
+/// A code missing here is not a compile error but a silent data loss: the value
+/// the user picked is rewritten to `zh-CN` by `sanitize()` on the next save.
+/// Each code also needs an installer mapping in `installer_lang.rs`.
+pub const LANGUAGES: [&str; 16] = [
+    "zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "de-DE", "fr-FR", "es-ES", "pt-BR", "it-IT",
+    "ru-RU", "pl-PL", "tr-TR", "vi-VN", "th-TH", "id-ID",
+];
 
 /// Tray click actions.
 pub const TRAY_ACTION_SHOW: u32 = 0;
@@ -263,7 +270,16 @@ fn config_path() -> PathBuf {
 pub fn load() -> Config {
     let path = config_path();
     let Ok(raw) = fs::read_to_string(&path) else {
-        return Config::default();
+        // No config yet: this is the first start after a fresh install, so
+        // adopt the language picked in the NSIS installer and persist it. Once
+        // the file exists the registry is never read again, so re-running the
+        // installer on a later upgrade cannot override a language the user
+        // chose inside the app.
+        let mut config = Config::default();
+        if crate::installer_lang::apply_first_run_language(&mut config) {
+            let _ = save(&config);
+        }
+        return config;
     };
     match serde_json::from_str::<Config>(&raw) {
         Ok(mut config) => {

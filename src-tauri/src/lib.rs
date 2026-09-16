@@ -8,6 +8,7 @@ pub mod cmdline;
 pub mod config;
 pub mod elevation;
 pub mod hotkey;
+pub mod installer_lang;
 pub mod memory;
 pub mod ntapi;
 pub mod single_instance;

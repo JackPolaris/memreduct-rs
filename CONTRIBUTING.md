@@ -41,6 +41,48 @@ npm run tauri build
 npx tauri build --bundles nsis
 ```
 
+## 多语言
+
+界面支持 16 种语言，安装程序也提供同样 16 种。**新增一种语言要改 5 个地方**，
+而且除了第一处之外都不会报错，只会静默失效：
+
+| 位置 | 作用 | 漏改的后果 |
+| --- | --- | --- |
+| `src/i18n/<code>.json` | 翻译文案，键集合必须与 `en-US.json` 完全相同（当前 121 条） | 缺键回落显示中文 |
+| `src/i18n/index.ts` 的 `SUPPORTED_LANGUAGES` | 下拉选项 / `LanguageCode` 类型 / 前缀归一化表 | 选项不出现；`RESOURCES` 是 `Record<LanguageCode, …>`，漏了会编译报错 |
+| `src-tauri/src/config.rs` 的 `LANGUAGES` | 后端校验白名单 | **静默**：保存时被 `sanitize()` 改回 `zh-CN` |
+| `src-tauri/src/installer_lang.rs` 的 `LCIDS` | 安装器语言 → 界面语言映射 | 安装时选了也不会被继承（有单测拦着） |
+| `tauri.conf.json` 的 `bundle.windows.nsis.languages` | 安装界面语言列表 | 安装界面没有该语言 |
+
+### 安装程序语言的两个坑
+
+- **Tauri 只自带 21 种安装界面译文**（`tauri-bundler/.../nsis/languages/`）。
+  `languages` 里列了却没有对应 `.nsh` 的语言**不会报错** —— Tauri 只打一条
+  `log::warn!`，然后把该语言从安装包里丢掉。官方的 21 种里没有波兰语、越南语、
+  泰语、印尼语，这 4 种由 `src-tauri/nsis-lang/*.nsh` 补齐；文件里的键必须与
+  Tauri 的 `English.nsh` 逐字一致（连 `choowHowToInstall` 这个拼写错误也要照抄，
+  它是契约）。
+- `customLanguageFiles` 的 key 必须同时出现在 `languages` 里，否则**完全静默忽略**
+  —— bundler 只拿 `languages` 去查 `customLanguageFiles`，从不反向校验。
+
+### 安装时选择的语言如何传给程序
+
+1. `displayLanguageSelector` 打开后，安装器弹出语言选择框。不选择时跟随**系统
+   语言**；系统语言不在列表内则回退到 `languages` 的第一项（刻意放的英语）。
+2. `nsis-lang/hooks.nsh` 的 `NSIS_HOOK_POSTINSTALL` 把 `$LANGUAGE`（LCID 数字）
+   写进 `HKCU\Software\memreduct\Mem Reduct` 的 `Installer Language`。
+   **这一步不能省**：Tauri 的模板声明了 `MUI_LANGDLL_REGISTRY_*`，却从不插入
+   唯一会写值的 `MUI_LANGDLL_SAVELANGUAGE`，所以那个值只读不写。不写回还有第二个
+   后果 —— 语言框只在 `/S` 下被跳过，而自动更新走 `/P`，于是每次后台更新都会
+   弹一个模态语言框（点"取消"＝`Abort`，整次安装中止）。
+3. 程序**首次启动**（`config.json` 还不存在）时，`installer_lang.rs` 读该值、
+   映射成语言码写进配置。此后 `config.json` 已存在就不会再读注册表，
+   **所以在应用内改的语言不会被后续更新或重装覆盖**。
+
+注册表路径里的 `memreduct` 来自 `identifier` 的第二段（`bundle.publisher` 未设置
+时的回退值）。`tauri.conf.json` 已显式写出 `publisher` 把它固定住；改动
+`publisher` 必须同步改 `installer_lang.rs` 的 `REG_SUBKEY`。
+
 ## 发布新版本
 
 自动更新依赖两样东西：**GitHub Release 上的安装包** 与 **更新清单 JSON**。
@@ -240,7 +282,7 @@ mem-reduct-tauri/
 ├─ src/                    # React 前端
 │  ├─ App.tsx              # 主界面 + 设置面板
 │  ├─ api.ts               # Tauri command 封装（类型与后端 Config 一一对应）
-│  ├─ i18n/                # 多语言资源（zh-CN / zh-TW / en-US / ja-JP）
+│  ├─ i18n/                # 多语言资源（16 种，见「多语言」一节）
 │  ├─ accents.ts           # 主题颜色预设
 │  └─ regions.ts           # 清理区域掩码与系统支持判定
 ├─ src-tauri/              # Rust 后端
@@ -256,7 +298,9 @@ mem-reduct-tauri/
 │  │  ├─ autostart.rs      # 计划任务静默提权自启
 │  │  ├─ elevation.rs      # 管理员权限检测与 runas 重启
 │  │  ├─ updater.rs        # 自动更新
+│  │  ├─ installer_lang.rs # 首次启动继承安装时选择的语言
 │  │  └─ cmdline.rs        # 命令行解析
+│  ├─ nsis-lang/           # 安装程序语言文件与钩子（见「多语言」一节）
 │  └─ tauri.conf.json
 ├─ assets/                 # 图标源文件（品牌色为蓝色 #3366FF，源为 icon-reference.png）
 ├─ scripts/                # 图标生成/校验脚本（见 scripts/README.md）
@@ -269,6 +313,11 @@ mem-reduct-tauri/
 - **前后端契约同源**：`src/api.ts` 的 `Config` 必须与 `src-tauri/src/config.rs`
   的 `Config` 字段一一对应；三处白名单（`config.rs` 的 `THEMES`/`ACCENT_KEYS`/
   `LANGUAGES`、`src/accents.ts`、`src/i18n/index.ts`）也要同步。
+- **加一种语言要改 5 处**，漏任何一处都不会报错，只会静默失效：
+  `src/i18n/<code>.json`（键集合必须与 `en-US.json` 完全相同）、
+  `src/i18n/index.ts` 的 `SUPPORTED_LANGUAGES`、`config.rs` 的 `LANGUAGES`、
+  `installer_lang.rs` 的 LCID 映射表、`tauri.conf.json` 的安装器语言列表。
+  细节见「多语言」一节。
 - **锁**：不要用 `Mutex::lock().unwrap()`。release 是 `panic = "abort"`，
   持锁线程一旦 panic，后续取锁会直接终止整个进程。用 `lib.rs` 的 `lock_or_recover`。
 - **配置值不可信**：一律经过 `Config::sanitize()`。
