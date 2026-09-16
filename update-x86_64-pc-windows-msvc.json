@@ -1,11 +1,11 @@
 {
-  "version": "3.5.15",
-  "notes": "Mem Reduct 3.5.15\n\n- 五种界面风格可选：玻璃拟态（默认）、硬边工业、霓虹 HUD、终端复古、静音极简。设置 → 外观中点一下即时生效，不必重启，每套都带自己的配色、描边、投影与进度条形态\n- 动效与质感整体升级：环境光层（缓慢漂移的光斑 + 极淡网格与颗粒）、仪表盘重做、清理完成时的轻微庆祝动效；全部只用 `transform`/`opacity`，不占用被清理的那点 CPU\n- 「关于」页新增外观入口；更新提示从浮层改为布局内横幅，不再遮挡页签栏\n- 发版脚本 `scripts/release.mjs` 固化全部发布步骤（预检 → 改版本 → 构建 → 清单 → 发布 → 校验），并改用 Git Data API 绕过对 `github.com` 的代理封锁\n- UAC 提权后窗口静默启动、不显示在最前：UAC 子进程由同意服务拉起，不满足\"前台进程启动\"的置顶条件。现在父进程在提权前调用 `AllowSetForegroundWindow(ASFW_ANY)`，子进程接管后再用 `SetWindowPos` 做 TOPMOST→NOTOPMOST 兜底\n- 仪表盘进度端帽没对齐：端帽原先靠肉眼目测，现在按环带中线（外半径与内半径的均值）计算 `top` 偏移，并加了诊断探针用几何量核对",
-  "pub_date": "2026-09-16T06:48:28Z",
+  "version": "3.5.16",
+  "notes": "Mem Reduct 3.5.16\n\n- 内存压力告警的动效重做：原来按钮上是一道绕圈旋转的高光，像手电筒在扫，也容易被误读成加载动画。现在改为按钮背后一层对称的柔和光晕，颜色跟随压力等级（与托盘图标一致），缓慢呼吸；玻璃与霓虹皮肤用光晕，硬边皮肤（工业、终端）改用描边框的硬闪烁，极简皮肤保持无装饰\n- 告警描边从 2px 实线弱化为 1.5px 半透明，不再有\"红圈箍住绿按钮\"的生硬感\n- 动效仍只使用透明度变化：模糊只栅格化一次，每帧都是合成器淡入淡出，不占用本应用要帮你省下的那点 CPU；开启\"减少动态效果\"时退化为静止柔光\n- 极简皮肤超阈值时按钮完全没有告警提示：该皮肤的 `box-shadow: none` 把告警描边一并覆盖掉了，现在补回了克制的静态描边\n- 更新提示里的变更要点不再断在半句：发版时从变更日志抽取要点，原先只取每条的第一行，而日志是折行书写的，于是提示与 Release 页说明都成了残句（如\"…霓虹 HUD、终端复古、\"）。现在会把续行折回同一条要点",
+  "pub_date": "2026-09-16T07:14:38Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TXM2VXJaSmNmOERmK1NCUzMrdjBCL2pQTTRtUjZuRHRSaWhUekRSN1hWd2QreUpBWWpYODE3a3lsODVoWW04WGgwckdaV2lIVU82VkV0eVVYU242bVFnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NTQxMTg5CWZpbGU6TWVtIFJlZHVjdF8zLjUuMTVfeDY0LXNldHVwLmV4ZQpjYTF3eUFhSGtCcGJCRG5NL0cwUElBY1RIbU80M0dMWXhkVEZFWmVlVkFJaXhMa2NBQisxSjdzVW5WQXJZS1U2Zjh2bHhwUzk1NVhCSXJNLzV2UEhDQT09Cg==",
-      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.15/Mem.Reduct_3.5.15_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TWdmYTIyZ3ljSk54L0JGeVBqcmpzN0YybzRrM1Zablo1aVJBVS9sMmFheFZkbUpjVmhsSWh1TlNBeUdScEJmMy9GNlVmMkVjelhoVmY2aVJKbDVXMHdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NTQyODc3CWZpbGU6TWVtIFJlZHVjdF8zLjUuMTZfeDY0LXNldHVwLmV4ZQpwdUZiai8yN3F0VVo3ZGJIRzd1VFMrVm9RSzJaakNXM3B2VzM3SEVuVzdVdnNBRzA4NG4wZS9OaGtOb29ndFpNRlFzZEhwSVBYd0pDN0lveWNhMmlEQT09Cg==",
+      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.16/Mem.Reduct_3.5.16_x64-setup.exe"
     }
   }
 }
