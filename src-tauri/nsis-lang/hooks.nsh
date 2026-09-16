@@ -38,3 +38,26 @@
   ; $LANGUAGE was seeded from this very value, so writing it back is a no-op.
   WriteRegStr HKCU "${MANUPRODUCTKEY}" "Installer Language" $LANGUAGE
 !macroend
+
+; WHY THE UNINSTALLER REMOVES THE SCHEDULED TASK
+; ----------------------------------------------
+; "Autostart" installs a logon task named "Mem Reduct" (`schtasks /create
+; /tn "Mem Reduct" …`), which lives in the machine's task store and is therefore
+; *not* inside $INSTDIR. Deleting the install directory leaves it behind, and
+; from then on every logon tries to launch an executable that no longer exists.
+; A later reinstall into a different directory would also find its autostart
+; switch stuck on a task pointing at the old path.
+;
+; `NSIS_HOOK_PREUNINSTALL` runs inside `Section Uninstall`, before the files go
+; away. `nsExec::Exec` keeps the console window hidden; the exit code is
+; discarded on purpose, because failing to remove a stale task must never fail
+; the uninstall itself. This installer is built with
+; `INSTALLMODE = "currentUser"`, so the uninstaller is *not* elevated — that is
+; fine: the task belongs to the same user SID (elevation adds the Administrators
+; group to the token, it does not change the user), and deleting a task only
+; needs DELETE on the object.
+
+!macro NSIS_HOOK_PREUNINSTALL
+  nsExec::Exec 'schtasks.exe /delete /tn "Mem Reduct" /f'
+  Pop $0
+!macroend

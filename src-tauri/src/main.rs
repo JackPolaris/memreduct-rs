@@ -8,16 +8,31 @@ fn main() {
 
     // --- One-shot elevated helpers (exit immediately, no UI) ---
     // These are fired from the UAC `runas` verb; none of them open a window.
+    //
+    // Each one *reports back* through `autostart::publish_result` before
+    // exiting. This process is a throwaway and nothing else can see whether
+    // `schtasks` worked, so without the acknowledgement the app has to guess
+    // and can only show a switch that silently flips back.
 
     // `-ensure-autostart`: create the silent elevated logon task.
     if args.iter().any(|a| a == "-ensure-autostart") {
-        let _ = mem_reduct_lib::autostart::install();
+        match mem_reduct_lib::autostart::install() {
+            Ok(()) => {
+                mem_reduct_lib::autostart::publish_result(mem_reduct_lib::autostart::RESULT_OK)
+            }
+            Err(detail) => mem_reduct_lib::autostart::publish_result(&format!("failed:{detail}")),
+        }
         return;
     }
 
     // `-disable-autostart`: remove the logon task.
     if args.iter().any(|a| a == "-disable-autostart") {
-        let _ = mem_reduct_lib::autostart::uninstall();
+        match mem_reduct_lib::autostart::uninstall() {
+            Ok(()) => {
+                mem_reduct_lib::autostart::publish_result(mem_reduct_lib::autostart::RESULT_OK)
+            }
+            Err(detail) => mem_reduct_lib::autostart::publish_result(&format!("failed:{detail}")),
+        }
         return;
     }
 

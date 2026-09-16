@@ -19,6 +19,7 @@ import {
   saveConfig,
   setAutostart,
   setWindowTheme,
+  type AutostartInfo,
   type CleanDonePayload,
   type Config,
   type MemoryInfo,
@@ -1546,6 +1547,8 @@ const SettingsPanel = memo(function SettingsPanel({
 }) {
   const [draft, setDraft] = useState<Config>(config);
   const [autostart, setAutostartState] = useState<boolean>(false);
+  /** A same-named task exists but points somewhere else (stale install). */
+  const [autostartStale, setAutostartStale] = useState<boolean>(false);
   const [updatePhase, setUpdatePhase] = useState<"idle" | "checking">("idle");
   /** Debounced persistence: sliders fire `set()` on every pixel of movement,
    *  and each save writes the config file and re-arms the global hotkey. */
@@ -1578,27 +1581,70 @@ const SettingsPanel = memo(function SettingsPanel({
   }, [config]);
 
   // Query the scheduled-task state once; keep it in sync with the switch.
+  //
+  // The acknowledgement is deliberately ignored here: it may describe an
+  // attempt from an earlier run of the app, and reporting it now would look
+  // like a reaction to something the user did not just do.
   useEffect(() => {
-    getAutostart().then(setAutostartState).catch(() => {});
+    getAutostart()
+      .then((info) => {
+        setAutostartState(info.enabled);
+        setAutostartStale(info.stale);
+      })
+      .catch(() => {});
   }, []);
 
-  // Poll the scheduled-task state until it settles (used after the UAC prompt
-  // is shown — the elevated helper writes the task asynchronously).
-  const pollAutostart = () => {
-    let tries = 0;
-    const timer = setInterval(() => {
+  const applyAutostartInfo = (info: AutostartInfo) => {
+    setAutostartState(info.enabled);
+    setAutostartStale(info.stale);
+  };
+
+  /** Tell the user when the change did not take effect, and why. */
+  const reportAutostartOutcome = (
+    want: boolean,
+    actual: boolean,
+    result: string | null,
+  ) => {
+    if (actual === want && !(result ?? "").startsWith("failed:")) return;
+    onToast(t("settings.autostart"), t("settings.autostartFailed"));
+  };
+
+  /**
+   * Poll until the task reaches the state the user asked for.
+   *
+   * The elevated helper runs asynchronously and exits immediately, so the
+   * switch cannot be trusted until the state actually lands. Waiting for the
+   * *expected* value (rather than for "a task exists", which never becomes true
+   * when disabling) also removes the flicker: the first poll often beats the
+   * helper and would otherwise push the switch back to its old position before
+   * the change shows up.
+   */
+  const pollAutostart = (want: boolean) => {
+    const deadline = Date.now() + 6_000;
+    let lastResult: string | null = null;
+    const timer = window.setInterval(() => {
       getAutostart()
-        .then((cur) => {
-          setAutostartState(cur);
-          tries += 1;
-          // Stop as soon as the task exists (enabled) or after ~6s.
-          if (cur || tries >= 20) {
-            clearInterval(timer);
-          }
+        .then((info) => {
+          lastResult = info.result;
+          applyAutostartInfo(info);
+          // `pending` means the helper has not reported yet, so `enabled` alone
+          // cannot be the settle condition — an "installed" task appears just
+          // before its verdict is written, and stopping there would swallow a
+          // failure. A `failed:` verdict is final and needs no further waiting.
+          const reported = !!lastResult && lastResult !== "pending";
+          const settled =
+            (info.enabled === want && reported) ||
+            (!!lastResult && lastResult.startsWith("failed:")) ||
+            Date.now() >= deadline;
+          if (!settled) return;
+          window.clearInterval(timer);
+          reportAutostartOutcome(want, info.enabled, lastResult);
         })
         .catch(() => {
-          tries += 1;
-          if (tries >= 20) clearInterval(timer);
+          window.clearInterval(timer);
+          // Could not read the state back at all: say so rather than leaving a
+          // switch that claims a change nobody confirmed.
+          onToast(t("settings.autostart"), t("settings.autostartFailed"));
         });
     }, 300);
   };
@@ -1610,16 +1656,31 @@ const SettingsPanel = memo(function SettingsPanel({
       .then((status) => {
         if (status === "elevation_requested") {
           // UAC prompt was shown; poll until the task state lands.
-          pollAutostart();
+          pollAutostart(enabled);
         } else {
-          // Task created/removed synchronously: confirm the final state.
-          setAutostartState(status === "installed");
+          // Task created/removed synchronously: the elevated path has already
+          // written its verdict, so a re-read confirms both switch and reason.
+          getAutostart()
+            .then((info) => {
+              applyAutostartInfo(info);
+              setAutostartState(status === "installed");
+            })
+            .catch(() => setAutostartState(status === "installed"));
         }
       })
-      .catch(() => {
-        // Roll back on failure and re-read the truth.
+      .catch((err: unknown) => {
+        // The UAC prompt being dismissed is a normal answer, not a bug: say
+        // which of the two happened instead of a bare rollback.
+        const code = String(err);
+        onToast(
+          t("settings.autostart"),
+          code.includes("uac_denied")
+            ? t("settings.autostartDenied")
+            : t("settings.autostartFailed"),
+        );
+        // Roll back and re-read the truth.
         setAutostartState(!enabled);
-        getAutostart().then(setAutostartState).catch(() => {});
+        getAutostart().then(applyAutostartInfo).catch(() => {});
       });
   };
 
@@ -1762,6 +1823,9 @@ const SettingsPanel = memo(function SettingsPanel({
             <>
               <Toggle label={t("settings.autostart")} icon={<IconBolt size={15} />} checked={autostart} onChange={toggleAutostart} />
               <div className="hint">{t("settings.autostartHint")}</div>
+              {autostartStale && (
+                <div className="hint warn">{t("settings.autostartStale")}</div>
+              )}
               <Toggle label={t("settings.showCleanConfirmation")} icon={<IconSparkles size={15} />} checked={draft.show_reduct_confirmation} onChange={(v) => set("show_reduct_confirmation", v)} />
               <Toggle label={t("settings.startMinimized")} icon={<IconTray size={15} />} checked={draft.start_minimized} onChange={(v) => set("start_minimized", v)} />
               <Toggle label={t("settings.hotkeyClean")} icon={<IconKeyboard size={15} />} checked={draft.hotkey_clean_enable} onChange={(v) => set("hotkey_clean_enable", v)} />

@@ -151,7 +151,20 @@
                 window.__mockConfig = config;
                 return null;
               case "get_autostart":
-                return false;
+                // Shape must match `AutostartInfo`: the settings switch reads
+                // `enabled`/`stale`/`result`, and `set_autostart` below is what
+                // flips it. `?autostart=stale` renders the warning hint.
+                return window.__mockAutostart ?? {
+                  enabled: false,
+                  stale: new URLSearchParams(location.search).get("autostart") === "stale",
+                  result: null,
+                };
+              case "set_autostart":
+                // The real backend routes this through UAC and reports back
+                // through the registry, so `elevation_requested` + a `pending`
+                // acknowledgement is the shape the UI has to cope with.
+                window.__mockAutostart = { enabled: args.enabled, stale: false, result: "pending" };
+                return "elevation_requested";
               case "set_window_theme":
                 // Record it: the diag overlay prints the colours the frontend
                 // resolved, which is the only way to check title-bar theming

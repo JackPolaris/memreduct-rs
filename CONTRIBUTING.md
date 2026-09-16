@@ -81,7 +81,57 @@ npx tauri build --bundles nsis
 
 注册表路径里的 `memreduct` 来自 `identifier` 的第二段（`bundle.publisher` 未设置
 时的回退值）。`tauri.conf.json` 已显式写出 `publisher` 把它固定住；改动
-`publisher` 必须同步改 `installer_lang.rs` 的 `REG_SUBKEY`。
+`publisher` 必须同步改 `registry.rs` 的 `APP_SUBKEY`（`installer_lang` 与
+`autostart` 都用它）。
+
+## 开机自启（计划任务）
+
+"开机自启"不是 Run 键，而是一个名为 `Mem Reduct` 的**计划任务**：登录时以
+`HighestAvailable` 静默启动本程序，因此开机即为管理员且永不弹 UAC。开关在
+设置→常规，提权助手是同一个 exe 的 `-ensure-autostart` / `-disable-autostart`
+两条一次性命令行。
+
+### 为什么必须用 XML 建任务
+
+`schtasks /create` **没有任何**电源或执行时限开关（`schtasks /create /?` 里
+`battery` 的匹配数是 0），而 Task Scheduler 的默认值对"常驻托盘的登录任务"
+是有害的：
+
+| 默认值 | 后果 |
+| --- | --- |
+| `DisallowStartIfOnBatteries=true` | 笔记本用电池开机时任务根本不启动 |
+| `StopIfGoingOnBatteries=true` | 运行中拔掉电源 → Task Scheduler **终止进程** |
+| `ExecutionTimeLimit=PT72H` | 常驻程序在 72 小时后被强杀 |
+
+所以 `autostart.rs::task_xml()` 生成完整定义，走
+`schtasks /create /tn … /xml <file> /f`。两个要点：
+
+- 文件必须是 **UTF-16LE + BOM**（`schtasks /query /xml` 也是这个编码）；
+  单字节文件会被拒绝。
+- 元素顺序受 Task Scheduler 的 XML schema 约束，改动模板后要用真实
+  `schtasks /create /xml` 建一次任务验证，单测只能断言子串。
+
+### 为什么目标路径记录在注册表里
+
+`task_state()` 要回答的是"这个任务**是不是我们的**"，而不是"有没有同名任务" ——
+否则换过安装目录后残留的旧任务会让开关显示"已开启"而开机什么都不启动。
+
+路径**不从 `schtasks` 的输出里读**：重定向时它输出的是**单字节**文本（没有 BOM，
+尽管声明写着 `encoding="UTF-16"`），编码随控制台代码页走，安装路径里的非 ASCII
+字符（`C:\Users\<中文名>\…`）会解析成乱码，看起来就像"别人的任务"。因此创建任务
+成功后再把 exe 路径写进 `HKCU\Software\memreduct\Mem Reduct\Autostart Target`
+（`REG_SZ` 天然是 UTF-16），比较时忽略大小写、分隔符和 `\\?\` 前缀。
+
+`Autostart Result` 是另一个值：提权助手启动后立即退出，没有任何 IPC，所以它把
+`ok` / `failed:<原因>` 写在这里，程序轮询读出来才能给出真实原因。`set_autostart`
+在派发助手前先写 `pending`，前端据此区分"助手还没回执"和"已经失败"。
+
+### 卸载要自己删任务
+
+任务在 `$INSTDIR` 之外，卸载器不会碰它，所以 `nsis-lang/hooks.nsh` 的
+`NSIS_HOOK_PREUNINSTALL` 里跑 `schtasks /delete`。安装模式是 `currentUser`，
+卸载器不提权，这不影响删除：提权只给令牌加上 Administrators 组，用户 SID 不变，
+而删除任务只需要对象上的 DELETE 权限。
 
 ## 发布新版本
 
@@ -295,9 +345,10 @@ mem-reduct-tauri/
 │  │  ├─ single_instance.rs    # 单实例互斥与提权交接
 │  │  ├─ tray.rs / trayicon.rs # 系统托盘 + 动态位图图标
 │  │  ├─ hotkey.rs         # 全局热键
-│  │  ├─ autostart.rs      # 计划任务静默提权自启
+│  │  ├─ autostart.rs      # 计划任务静默提权自启（见「开机自启」一节）
 │  │  ├─ elevation.rs      # 管理员权限检测与 runas 重启
 │  │  ├─ updater.rs        # 自动更新
+│  │  ├─ registry.rs       # HKCU 字符串值读写的共用助手
 │  │  ├─ installer_lang.rs # 首次启动继承安装时选择的语言
 │  │  └─ cmdline.rs        # 命令行解析
 │  ├─ nsis-lang/           # 安装程序语言文件与钩子（见「多语言」一节）

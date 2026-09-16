@@ -11,6 +11,7 @@ pub mod hotkey;
 pub mod installer_lang;
 pub mod memory;
 pub mod ntapi;
+pub mod registry;
 pub mod single_instance;
 pub mod titlebar;
 pub mod tray;
@@ -273,10 +274,28 @@ fn notify(app: AppHandle, title: String, body: String, system: Option<bool>) -> 
     Ok(())
 }
 
-/// Query whether the silent elevated autostart task is installed.
+/// State of the silent elevated autostart task, shaped for the settings switch.
+#[derive(Debug, serde::Serialize)]
+pub struct AutostartInfo {
+    /// The task exists *and* launches this executable.
+    pub enabled: bool,
+    /// A task with our name exists but is not ours — a leftover from an install
+    /// into another directory. Toggling the switch repairs it.
+    pub stale: bool,
+    /// Verdict of the last elevated helper (`ok` / `pending` / `failed:…`), so
+    /// the UI can give a reason instead of a switch that silently flips back.
+    pub result: Option<String>,
+}
+
+/// Query the silent elevated autostart task.
 #[tauri::command]
-fn get_autostart() -> bool {
-    autostart::is_enabled()
+fn get_autostart() -> AutostartInfo {
+    let state = autostart::task_state();
+    AutostartInfo {
+        enabled: state.enabled,
+        stale: state.stale,
+        result: autostart::task_result(),
+    }
 }
 
 /// Enable or disable the silent elevated autostart task.
@@ -284,31 +303,49 @@ fn get_autostart() -> bool {
 /// Enabling requires elevation (to create a highest-privilege logon task). If
 /// the app is not currently elevated, a single UAC prompt is shown once to
 /// install the task; after that, every logon starts the app elevated & silent.
+///
+/// The success value and the error are stable **codes**, never prose: the
+/// frontend owns all localisation and the backend has no idea which of the 16
+/// languages is selected. Errors are `uac_denied` (the consent dialog was
+/// dismissed) and `task_failed` (the task operation failed; the underlying
+/// reason stays in the registry acknowledgement for diagnosis).
 #[tauri::command]
 fn set_autostart(enabled: bool) -> Result<String, String> {
-    if enabled {
-        if elevation::is_elevated() {
-            autostart::install()?;
-            Ok("installed".into())
+    // An elevated helper may be about to report, and the UI reads this value
+    // while polling: make sure it cannot mistake a stale verdict for this one.
+    autostart::mark_pending();
+
+    if elevation::is_elevated() {
+        let outcome = if enabled {
+            autostart::install()
         } else {
-            // One-shot elevation to create the task (the only UAC prompt).
-            if elevation::relaunch_with_args("-ensure-autostart") {
-                Ok("elevation_requested".into())
-            } else {
-                Err("无法请求管理员权限(UAC 被取消)".into())
+            autostart::uninstall()
+        };
+        return match outcome {
+            Ok(()) => {
+                autostart::publish_result(autostart::RESULT_OK);
+                Ok(if enabled { "installed" } else { "removed" }.into())
             }
-        }
+            Err(detail) => {
+                autostart::publish_result(&format!("failed:{detail}"));
+                Err("task_failed".into())
+            }
+        };
+    }
+
+    // One-shot elevation to create or remove the task (the only UAC prompt).
+    let helper = if enabled {
+        "-ensure-autostart"
     } else {
-        if elevation::is_elevated() {
-            autostart::uninstall()?;
-            Ok("removed".into())
-        } else {
-            if elevation::relaunch_with_args("-disable-autostart") {
-                Ok("elevation_requested".into())
-            } else {
-                Err("无法请求管理员权限(UAC 被取消)".into())
-            }
-        }
+        "-disable-autostart"
+    };
+    if elevation::relaunch_with_args(helper) {
+        Ok("elevation_requested".into())
+    } else {
+        // This process sees the dismissal directly, so this one does not need
+        // the registry channel.
+        autostart::publish_result("denied");
+        Err("uac_denied".into())
     }
 }
 
@@ -575,8 +612,42 @@ pub fn run() {
         })
         .setup(move |app| {
             // Create the tray icon and store it in state for background updates.
-            if let Ok(tray) = tray::create_tray(app.handle()) {
-                *lock_or_recover(&app.state::<AppState>().tray) = Some(tray);
+            //
+            // A logon launch happens while the shell is still coming up, and
+            // `Shell_NotifyIcon` fails when the notification area is not ready
+            // yet. Losing the icon is not a cosmetic problem here: a logon start
+            // keeps its window hidden, so "no tray icon" means an app the user
+            // can neither see nor reach — and the single-instance guard makes a
+            // manual relaunch just try to focus a window that is not shown.
+            // Retry in the background instead of accepting the first failure.
+            match tray::create_tray(app.handle()) {
+                Ok(tray) => *lock_or_recover(&app.state::<AppState>().tray) = Some(tray),
+                Err(err) => {
+                    let handle = app.handle().clone();
+                    std::thread::spawn(move || {
+                        // ~15s in total, covering the logon window where the
+                        // notification area appears late.
+                        for delay_ms in [500u64, 1_000, 2_000, 4_000, 8_000] {
+                            std::thread::sleep(Duration::from_millis(delay_ms));
+                            match tray::create_tray(&handle) {
+                                Ok(tray) => {
+                                    *lock_or_recover(&handle.state::<AppState>().tray) = Some(tray);
+                                    return;
+                                }
+                                Err(_) => continue,
+                            }
+                        }
+                        eprintln!("Mem Reduct: tray icon could not be created: {err}");
+                        // Last resort: a window is worse than a tray icon but far
+                        // better than an app with no way in. Only reached after
+                        // every retry failed, i.e. when the icon will never come.
+                        if let Some(window) = handle.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                    });
+                }
             }
 
             let handle = app.handle().clone();

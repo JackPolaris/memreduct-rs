@@ -146,6 +146,22 @@ export const saveConfig = (config: Config) =>
 export const getOsInfo = () => invoke<OsInfo>("get_os_info");
 export const getVersion = () => invoke<string>("get_version");
 export const openExternal = (url: string) => invoke<void>("open_external", { url });
-export const getAutostart = () => invoke<boolean>("get_autostart");
+/**
+ * State of the silent elevated autostart task.
+ *
+ * `result` is the last acknowledgement from the elevated helper — `"pending"`
+ * while one is running, `"ok"` once it succeeded, `"failed:…"` otherwise. It is
+ * the only channel back from a helper that exits immediately, which is why the
+ * UI can report a real reason instead of a switch that silently flips back.
+ */
+export type AutostartInfo = {
+  /** The task exists *and* launches this executable. */
+  enabled: boolean;
+  /** A same-named task exists but is not ours; toggling off/on repairs it. */
+  stale: boolean;
+  result: string | null;
+};
+
+export const getAutostart = () => invoke<AutostartInfo>("get_autostart");
 export const setAutostart = (enabled: boolean) =>
   invoke<string>("set_autostart", { enabled });

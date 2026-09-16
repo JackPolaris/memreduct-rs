@@ -1377,6 +1377,12 @@ input[type="color"] {
   padding: 8px 4px;
 }
 
+/* A hint that reports something actionable but not broken — currently the
+   "an autostart task pointing elsewhere was found" notice. */
+.hint.warn {
+  color: var(--warning);
+}
+
 .hotkey-btn {
   border: 1px solid var(--border-strong);
   background: var(--surface-solid);
