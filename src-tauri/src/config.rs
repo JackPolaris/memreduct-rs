@@ -124,12 +124,16 @@ impl Config {
         self.autoreduct_value = self.autoreduct_value.clamp(1, 100);
         self.autoreduct_interval_value = self.autoreduct_interval_value.clamp(1, 1440);
 
-        // Tray thresholds must stay ordered: the icon picks the danger colour
-        // first, so `warning >= danger` would silently hide the warning state.
-        self.tray_level_warning = self.tray_level_warning.min(99);
+        // Tray thresholds: both live in the same 1..100 range the UI offers, and
+        // the danger level must never sit below the warning level. The tray icon
+        // picks the danger colour first, so an inverted pair would make the
+        // warning state unreachable. The danger level is the one raised: it keeps
+        // the warning threshold the user actually set. (The UI moves the pair
+        // together, so this only ever repairs a hand-edited or older file.)
+        self.tray_level_warning = self.tray_level_warning.clamp(1, 100);
         self.tray_level_danger = self.tray_level_danger.clamp(1, 100);
-        if self.tray_level_warning >= self.tray_level_danger {
-            self.tray_level_warning = self.tray_level_danger - 1;
+        if self.tray_level_warning > self.tray_level_danger {
+            self.tray_level_danger = self.tray_level_warning;
         }
 
         // Only the two documented click actions exist.
@@ -351,23 +355,38 @@ mod tests {
 
     #[test]
     fn sanitize_keeps_tray_thresholds_ordered() {
-        // Crossed thresholds would hide the warning colour entirely.
+        // Crossed thresholds would hide the warning colour entirely. The danger
+        // level is raised to meet the warning level — raising it keeps the
+        // threshold the user actually set.
         let mut c = Config {
             tray_level_warning: 95,
             tray_level_danger: 60,
             ..Config::default()
         };
         c.sanitize();
-        assert!(c.tray_level_warning < c.tray_level_danger, "{c:?}");
+        assert_eq!(c.tray_level_warning, 95);
+        assert_eq!(c.tray_level_danger, 95);
 
+        // Equal thresholds are legal: the danger colour simply wins.
         let mut c = Config {
             tray_level_warning: 100,
             tray_level_danger: 100,
             ..Config::default()
         };
         c.sanitize();
+        assert_eq!(c.tray_level_warning, 100);
         assert_eq!(c.tray_level_danger, 100);
-        assert_eq!(c.tray_level_warning, 99);
+
+        // Out-of-range values are clamped into the range the UI can produce, so
+        // a saved value is never rewritten on the next load.
+        let mut c = Config {
+            tray_level_warning: 0,
+            tray_level_danger: 0,
+            ..Config::default()
+        };
+        c.sanitize();
+        assert_eq!(c.tray_level_warning, 1);
+        assert_eq!(c.tray_level_danger, 1);
     }
 
     #[test]

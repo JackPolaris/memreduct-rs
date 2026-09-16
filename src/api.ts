@@ -107,6 +107,16 @@ export interface TrayLabels {
 export const applyTrayLabels = (labels: TrayLabels) =>
   invoke<void>("apply_tray_labels", { labels });
 
+/**
+ * Re-tint the native title bar to match the current theme.
+ *
+ * The colours are resolved from `styles.css` by the caller, so the skin palette
+ * stays in one place. Returns the DWM attributes the OS accepted — Windows 10
+ * understands the dark-mode flag but not the caption colours.
+ */
+export const setWindowTheme = (dark: boolean, caption: string, text: string) =>
+  invoke<string[]>("set_window_theme", { dark, caption, text });
+
 // Automatic update via tauri-plugin-updater (source fixed to the official repo).
 export interface UpdateInfo {
   available: boolean;

@@ -27,6 +27,57 @@ const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
 /// downloading. Generous, because it covers the whole body on a slow link.
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
 
+/// Marker file written just before the installer runs, consumed by the next
+/// start of the app.
+///
+/// After a silent install the app is relaunched by the *installer*, a process
+/// the user never interacted with. Windows' foreground rules only let a process
+/// take the foreground when it — or the process that started it — already owns
+/// it, so that relaunch comes up behind whatever the user is looking at; with
+/// "start minimized to tray" enabled it does not even show. The start therefore
+/// has to be treated exactly like the elevation hand-over (`-takeover`), and a
+/// file is the only channel that survives the process boundary:
+/// `AllowSetForegroundWindow` delegates the right to a *single* process for a
+/// *single* call, and the process that ends up calling `SetForegroundWindow` is
+/// a grandchild of ours, which that delegation never reaches.
+const RELAUNCH_MARKER: &str = "relaunched-after-update.flag";
+
+fn marker_path() -> std::path::PathBuf {
+    crate::config::data_dir().join(RELAUNCH_MARKER)
+}
+
+/// Record that the next start of this app is the installer's relaunch.
+fn mark_at(path: &std::path::Path) {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    // Best effort: failing here costs the foreground once, never the install.
+    let _ = std::fs::write(path, b"1");
+}
+
+/// Read and clear the marker. It must be consumed *once* — leaving it behind
+/// would make every later cold start hijack the foreground.
+fn take_at(path: &std::path::Path) -> bool {
+    let pending = path.exists();
+    if pending {
+        let _ = std::fs::remove_file(path);
+    }
+    pending
+}
+
+fn mark_relaunch_pending() {
+    mark_at(&marker_path());
+}
+
+fn clear_relaunch_pending() {
+    let _ = std::fs::remove_file(marker_path());
+}
+
+/// Consume the marker: `true` when this start is the installer's relaunch.
+pub fn take_relaunch_pending() -> bool {
+    take_at(&marker_path())
+}
+
 /// Map a Rust architecture name to its release target triple.
 fn triple_for(arch: &str) -> &'static str {
     match arch {
@@ -231,7 +282,12 @@ pub async fn download_and_install(app: AppHandle) -> Result<(), String> {
     // `Update::install` launches the installer and then calls
     // `std::process::exit(0)` on its own.
     let progress_app = app.clone();
-    update
+
+    // Set before the hand-off: once the installer takes over we no longer get
+    // to run any code. Cleared again if the install fails and we keep running,
+    // so a later cold start is not mistaken for a relaunch.
+    mark_relaunch_pending();
+    let installed = update
         .download_and_install(
             move |chunk, total| {
                 let _ = progress_app.emit(
@@ -241,13 +297,36 @@ pub async fn download_and_install(app: AppHandle) -> Result<(), String> {
             },
             || {},
         )
-        .await
-        .map_err(|e| format!("下载或安装更新失败:{e}"))
+        .await;
+    if installed.is_err() {
+        clear_relaunch_pending();
+    }
+    installed.map_err(|e| format!("下载或安装更新失败:{e}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relaunch_marker_is_consumed_exactly_once() {
+        // Temp dir, never the real data dir: the test must not touch the user's
+        // config folder.
+        let dir = std::env::temp_dir().join("memreduct-marker-test");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join(RELAUNCH_MARKER);
+        let _ = std::fs::remove_file(&path);
+
+        assert!(!take_at(&path), "没有标记时不该报告为更新后重启");
+        mark_at(&path);
+        assert!(take_at(&path), "标记应被读到");
+        assert!(
+            !take_at(&path),
+            "标记必须只消费一次,否则之后每次冷启动都会抢焦点"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
 
     #[test]
     fn target_triple_maps_each_architecture() {

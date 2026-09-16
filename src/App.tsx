@@ -18,6 +18,7 @@ import {
   openExternal,
   saveConfig,
   setAutostart,
+  setWindowTheme,
   type CleanDonePayload,
   type Config,
   type MemoryInfo,
@@ -98,6 +99,35 @@ function pressureColor(percent: number, warnLevel: number, dangerLevel: number):
 /** Default thresholds, matching `Config::default()` on the Rust side. */
 const DEFAULT_WARN_LEVEL = 70;
 const DEFAULT_DANGER_LEVEL = 90;
+
+/** Range shared by both tray thresholds — the one `Config::sanitize` clamps to. */
+const TRAY_LEVEL_MIN = 1;
+const TRAY_LEVEL_MAX = 100;
+
+/**
+ * Move one of the paired tray thresholds, carrying the other along.
+ *
+ * The invariant is `danger >= warning`: the tray icon checks the danger level
+ * first, so a danger level below the warning level would make the warning colour
+ * unreachable. Dragging warning up therefore raises danger to match, and
+ * dragging danger down lowers warning — the pair moves like a two-handle range
+ * rather than one slider silently rewriting the other's value or range.
+ */
+function trayThresholds(
+  current: Config,
+  which: "warning" | "danger",
+  value: number
+): Partial<Config> {
+  return which === "warning"
+    ? {
+        tray_level_warning: value,
+        tray_level_danger: Math.max(current.tray_level_danger, value),
+      }
+    : {
+        tray_level_danger: value,
+        tray_level_warning: Math.min(current.tray_level_warning, value),
+      };
+}
 
 /**
  * Text form of a level bar, for the terminal skin: `[####------]`.
@@ -543,6 +573,32 @@ export default function App() {
     const accent = accentByKey(config?.accent_color ?? "green");
     document.documentElement.style.setProperty("--accent-base", accent.primary);
   }, [config?.accent_color]);
+
+  /**
+   * Keep the *native* title bar in step with the skin.
+   *
+   * The window keeps native decorations (system buttons bring snap layouts,
+   * resize borders and the system menu), and the OS only knows the system
+   * theme — so a dark skin on a light system left a bright caption above a dark
+   * window. The colours are read back out of the same CSS variables the skin
+   * uses rather than duplicated in Rust, and the read happens in a frame
+   * callback so the variables reflect the skin that was just applied.
+   */
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => {
+      const el = document.querySelector(".app");
+      if (!el) return;
+      const cs = getComputedStyle(el);
+      const caption = cs.getPropertyValue("--bg-grad-1").trim();
+      const text = cs.getPropertyValue("--text").trim();
+      if (!caption || !text) return;
+      setWindowTheme(resolvedDark, caption, text).catch(() => {
+        // Non-fatal by design: without it the caption simply keeps the system
+        // colours, which is where this started.
+      });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [resolvedDark, uiStyle.key, config?.accent_color, config !== null]);
 
   // Keep the native tray menu labels in sync with the app language.
   const pushTrayLabels = useCallback(() => {
@@ -1580,8 +1636,15 @@ const SettingsPanel = memo(function SettingsPanel({
     draftRef.current = draft;
   }, [draft]);
 
-  const set = <K extends keyof Config>(k: K, v: Config[K]) => {
-    const next = { ...draftRef.current, [k]: v };
+  /**
+   * Apply a patch to the draft, debouncing the save.
+   *
+   * Everything that changes the draft goes through here so there is exactly one
+   * debounce timer: two independent `set()` calls would each arm their own and
+   * the earlier one would persist a draft that no longer exists.
+   */
+  const setMany = (patch: Partial<Config>) => {
+    const next = { ...draftRef.current, ...patch };
     draftRef.current = next;
     setDraft(next);
     pendingSave.current = next;
@@ -1594,6 +1657,10 @@ const SettingsPanel = memo(function SettingsPanel({
         onSaveRef.current(pending);
       }
     }, 300);
+  };
+
+  const set = <K extends keyof Config>(k: K, v: Config[K]) => {
+    setMany({ [k]: v } as unknown as Partial<Config>);
   };
 
   /**
@@ -1810,13 +1877,28 @@ const SettingsPanel = memo(function SettingsPanel({
             <>
               <Select label={t("settings.doubleClickAction")} value={draft.tray_action_dc} onChange={(v) => set("tray_action_dc", v)} options={[[0, t("tray.show")], [1, t("tray.clean")]]} />
               <Select label={t("settings.middleClickAction")} value={draft.tray_action_mc} onChange={(v) => set("tray_action_mc", v)} options={[[0, t("tray.show")], [1, t("tray.clean")]]} />
-              {/* The two thresholds are ordered by construction: warning can
-                  never reach danger, so the sliders cannot express a state the
-                  backend would silently rewrite (`sanitize` forces
-                  `warning < danger`, since the tray icon picks the danger colour
-                  first and an inverted pair would hide the warning state). */}
-              <Slider label={t("settings.warningLevel")} value={draft.tray_level_warning} min={0} max={draft.tray_level_danger - 1} onChange={(v) => set("tray_level_warning", v)} />
-              <Slider label={t("settings.dangerLevel")} value={draft.tray_level_danger} min={draft.tray_level_warning + 1} max={100} onChange={(v) => set("tray_level_danger", v)} />
+              {/* The two thresholds are a pair, not two independent numbers:
+                  the danger level must never sit below the warning level, or the
+                  warning colour would never appear (the tray icon picks danger
+                  first). Dragging one past the other therefore carries the other
+                  along — the alternative, stopping the handle at the neighbour,
+                  just refuses the drag and reads as a broken slider. Both keep
+                  the same 1..100 range the backend clamps to, so a value the UI
+                  can produce is never rewritten on save. */}
+              <Slider
+                label={t("settings.warningLevel")}
+                value={draft.tray_level_warning}
+                min={TRAY_LEVEL_MIN}
+                max={TRAY_LEVEL_MAX}
+                onChange={(v) => setMany(trayThresholds(draftRef.current, "warning", v))}
+              />
+              <Slider
+                label={t("settings.dangerLevel")}
+                value={draft.tray_level_danger}
+                min={TRAY_LEVEL_MIN}
+                max={TRAY_LEVEL_MAX}
+                onChange={(v) => setMany(trayThresholds(draftRef.current, "danger", v))}
+              />
               <Toggle label={t("settings.showCleanResult")} icon={<IconSparkles size={15} />} checked={draft.balloon_clean_results} onChange={(v) => set("balloon_clean_results", v)} />
             </>
           )}

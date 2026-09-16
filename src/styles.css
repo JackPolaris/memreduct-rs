@@ -1998,6 +1998,13 @@ input[type="color"] {
   box-shadow: none;
 }
 
+/* Same border geometry as terminal, doubled: the 2px frames on `.gauge` and
+   `.gauge-inner` pull the band to r=48..60, centreline r=54, so the cap sits
+   1px further in than the borderless base rule assumes. */
+.app[data-ui="industrial"] .gauge-head-dot {
+  top: 6px;
+}
+
 .app[data-ui="industrial"] .gauge::before {
   display: none;
 }
@@ -2604,6 +2611,12 @@ input[type="color"] {
 }
 
 .app[data-ui="terminal"] .gauge-head-dot {
+  /* The 1px dashed border on both `.gauge` and `.gauge-inner` pulls the ring's
+     visible band inward: it runs from r=48 (inner edge) to r=61 (the gradient
+     fills the padding box), centreline r=54.5 — and `.gauge-head`'s `inset: 0`
+     box edge sits at that same r=61, so the offset from the base rule shrinks
+     by 0.5px. Without this the cap floats half a pixel outside the band. */
+  top: 6.5px;
   width: 10px;
   height: 10px;
   margin: -5px 0 0 -5px;

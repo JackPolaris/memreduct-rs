@@ -152,6 +152,12 @@
                 return null;
               case "get_autostart":
                 return false;
+              case "set_window_theme":
+                // Record it: the diag overlay prints the colours the frontend
+                // resolved, which is the only way to check title-bar theming
+                // without a real window frame.
+                window.__mockTitlebar = args;
+                return ["dark-mode", "caption-color", "border-color", "text-color"];
               case "clean_memory":
                 used = 6.1;
                 pct = 52;
@@ -324,6 +330,12 @@
               [...document.querySelectorAll(".view")]
                 .map((p) => `${p.id}=${getComputedStyle(p).display}`)
                 .join(" ");
+            // Title-bar probe: the caption colours come from the skin's own CSS
+            // variables, so print what was last sent to the backend.
+            const tb = window.__mockTitlebar;
+            pre.textContent +=
+              "\ntitlebar " +
+              (tb ? `dark=${tb.dark} caption=${tb.caption} text=${tb.text}` : "(未调用)");
             // Slider probe: the filled track is a gradient positioned by `--v`
             // and needs `appearance: none` to be visible at all.
             const rng = document.querySelector('.slider input[type="range"]');
@@ -347,7 +359,14 @@
               const cx = gr.left + gr.width / 2;
               const cy = gr.top + gr.height / 2;
               const dist = Math.hypot(dr.left + dr.width / 2 - cx, dr.top + dr.height / 2 - cy);
-              const bandMid = (gr.width / 2 + inner.getBoundingClientRect().width / 2) / 2;
+              // The gradient fills the *padding* box, so a bordered skin draws
+              // its band from the inner element's rim to (outer radius − border).
+              // Border widths must be subtracted or bordered skins read as
+              // misaligned by the border width even when the cap is correct.
+              const borderOf = (el) => parseFloat(getComputedStyle(el).borderLeftWidth) || 0;
+              const outerR = gr.width / 2 - borderOf(dial);
+              const innerR = inner.getBoundingClientRect().width / 2;
+              const bandMid = (outerR + innerR) / 2;
               const ang = ((Math.atan2(dr.top + dr.height / 2 - cy, dr.left + dr.width / 2 - cx) * 180) / Math.PI + 90 + 360) % 360;
               pre.textContent +=
                 `\ngauge-dot r=${dist.toFixed(1)} (band中线=${bandMid.toFixed(1)})` +

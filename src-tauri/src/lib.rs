@@ -11,6 +11,7 @@ pub mod hotkey;
 pub mod memory;
 pub mod ntapi;
 pub mod single_instance;
+pub mod titlebar;
 pub mod tray;
 pub mod trayicon;
 pub mod updater;
@@ -226,6 +227,29 @@ fn open_external(url: String) -> Result<(), String> {
     } else {
         Err("打开链接失败".into())
     }
+}
+
+/// Re-tint the native title bar so it follows the app's theme instead of the
+/// system one.
+///
+/// The colours are produced by the frontend reading its own CSS variables —
+/// the skin palette is defined once in `styles.css` and must not be duplicated
+/// here. Everything is best effort: on Windows 10 only the dark-mode flag
+/// exists, and the returned list says what the OS actually accepted.
+#[tauri::command]
+fn set_window_theme(
+    window: tauri::Window,
+    dark: bool,
+    caption: String,
+    text: String,
+) -> Result<Vec<String>, String> {
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+    Ok(
+        titlebar::apply(hwnd.0 as isize, dark, Some(&caption), Some(&text))
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+    )
 }
 
 /// Show a native system notification via tauri-plugin-notification.
@@ -562,6 +586,12 @@ pub fn run() {
             // launched by the logon task (`-startup`); otherwise it is shown.
             let start_minimized = lock_config(&app.state::<AppState>()).start_minimized;
             let silent_launch = autostart::is_startup_launch();
+            // A start that follows an update install is not a cold start either:
+            // the installer relaunched us and never owned the foreground, so the
+            // window has to be forced up — including when "start minimized to
+            // tray" is configured, where staying hidden reads as "the app
+            // silently restarted after updating".
+            let resumed_after_update = updater::take_relaunch_pending();
             if let Some(window) = app.get_webview_window("main") {
                 // A hand-over (`-takeover`) is not a cold start: the user was
                 // looking at this window when they triggered the elevated
@@ -571,13 +601,25 @@ pub fn run() {
                 // the UAC consent dialog the foreground lock belongs to
                 // whatever the user was working in, so `show()` alone would
                 // leave the window *behind* everything: force it up.
-                if takeover {
+                if takeover || resumed_after_update {
                     let _ = window.show();
                     let _ = window.unminimize();
                     let _ = window.set_focus();
                     if let Ok(hwnd) = window.hwnd() {
                         single_instance::force_foreground(hwnd.0 as isize);
                     }
+                    // The window exists but is not mapped yet at this point in
+                    // some launches, and `SetForegroundWindow` on an unmapped
+                    // window is a no-op — repeat once the event loop has
+                    // settled. Cheap, idempotent, and only ever runs on a
+                    // hand-over or an update relaunch.
+                    let retry = window.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(600));
+                        if let Ok(hwnd) = retry.hwnd() {
+                            single_instance::force_foreground(hwnd.0 as isize);
+                        }
+                    });
                 } else if start_minimized || silent_launch {
                     let _ = window.hide();
                 } else {
@@ -640,6 +682,7 @@ pub fn run() {
             get_version,
             open_external,
             apply_tray_labels,
+            set_window_theme,
             updater::check_for_update,
             updater::download_and_install,
             updater::get_updater_info
