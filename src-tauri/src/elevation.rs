@@ -87,15 +87,6 @@ pub fn enable_memory_privileges() {
     }
 }
 
-/// Relaunch the current executable elevated via the UAC `runas` verb, passing
-/// a single-use `-clean-once <mask>` argument so the elevated copy performs one
-/// cleanup and exits (no second window, no duplicate tray icon).
-///
-/// Returns `true` when the elevation request was successfully submitted.
-pub fn relaunch_as_admin(mask: u32) -> bool {
-    relaunch_with_args(&format!("-clean-once {mask}"))
-}
-
 /// Relaunch the current executable elevated via the UAC `runas` verb with the
 /// given arguments. Used for one-shot elevated helpers (cleanup / install).
 pub fn relaunch_with_args(args: &str) -> bool {

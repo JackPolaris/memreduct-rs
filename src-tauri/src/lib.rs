@@ -78,13 +78,19 @@ fn perform_clean(app: &AppHandle, mask: u32, source: &str, is_autoclean: bool) -
     let allow_standby = lock_config(&app.state::<AppState>()).allow_standby_list_cleanup;
     let result = memory::clean_memory(mask, allow_standby, is_autoclean);
 
-    {
+    // Bump the timestamp under the lock, but write the file *after* releasing
+    // it: `config::save` does `create_dir_all` + write + rename, and holding the
+    // config mutex across that disk IO would stall the 1 Hz background loop
+    // (which clones the config every tick), the tray/hotkey paths and the
+    // `save_config` command behind a filesystem call.
+    let snapshot = {
         let state = app.state::<AppState>();
         let mut cfg = lock_config(&state);
         cfg.statistic_last_reduct = unix_now();
-        // A failed write must not take the cleanup down with it.
-        let _ = config::save(&cfg);
-    }
+        cfg.clone()
+    };
+    // A failed write must not take the cleanup down with it.
+    let _ = config::save(&snapshot);
 
     let _ = app.emit("memory-update", memory::get_memory_info());
     let _ = app.emit(

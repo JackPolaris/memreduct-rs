@@ -12,6 +12,8 @@
                 /dev-mock.html?still=1     freeze animation/transition (layout
                                            checks; virtual time catches the
                                            entrance stagger mid-flight)
+                /dev-mock.html?vw=400     emulate a narrow window (headless Edge
+                                           enforces a ~500px minimum viewport)
 -->
 <html lang="zh-CN">
   <head>
@@ -252,6 +254,19 @@
           document.head.appendChild(st);
         }
 
+        // `?vw=N` emulates a narrow window. Headless Edge enforces a ~500px
+        // minimum viewport (400 reported 492), so `--window-size` can no longer
+        // produce a 400px layout even with --force-device-scale-factor=1.
+        // styles.css has no viewport media queries (only prefers-reduced-motion),
+        // so constraining `.app`'s width is layout-equivalent to a narrow
+        // window. The diag probe below measures overflow against this width.
+        const vw = Number(params.get("vw")) || 0;
+        if (vw) {
+          const st = document.createElement("style");
+          st.textContent = `.app{width:${vw}px !important}`;
+          document.head.appendChild(st);
+        }
+
         if (params.get("diag") === "1") {
           setTimeout(() => {
             const de = document.documentElement;
@@ -263,9 +278,10 @@
               }
               return false;
             };
+            const bound = vw || window.innerWidth;
             const offenders = [...document.querySelectorAll("body *")]
               .map((el) => ({ el, r: el.getBoundingClientRect() }))
-              .filter(({ el, r }) => r.right > window.innerWidth + 0.5 && r.width > 4)
+              .filter(({ el, r }) => r.right > bound + 0.5 && r.width > 4)
               .sort((a, b) => b.r.right - a.r.right)
               .slice(0, 6)
               .map(
@@ -279,8 +295,8 @@
               "position:fixed;left:0;bottom:0;z-index:99999;background:#000;color:#0f0;" +
               "font:10px/1.45 monospace;padding:6px;margin:0;max-width:100%;white-space:pre-wrap";
             pre.textContent =
-              `innerWidth=${window.innerWidth} scrollWidth=${de.scrollWidth} ` +
-              `bodyScrollWidth=${document.body.scrollWidth}\n` +
+              `innerWidth=${window.innerWidth} bound=${bound} ` +
+              `scrollWidth=${de.scrollWidth} bodyScrollWidth=${document.body.scrollWidth}\n` +
               `data-ui=${document.querySelector(".app")?.getAttribute("data-ui")} ` +
               `active=${document.querySelector(".style-card.active .style-name")?.textContent ?? "-"} ` +
               `config=${(window.__mockConfig && window.__mockConfig.ui_style) || "-"}\n` +

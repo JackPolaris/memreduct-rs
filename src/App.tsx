@@ -74,8 +74,6 @@ interface Toast {
   progress?: number;
   /** total bytes for the progress bar */
   progressTotal?: number;
-  /** action for the "update" kind button */
-  action?: () => void;
 }
 
 function formatBytes(n: number): string {
@@ -583,7 +581,6 @@ export default function App() {
       opts?: {
         progress?: number;
         progressTotal?: number;
-        action?: () => void;
         stickyId?: number;
       }
     ) => {
@@ -603,7 +600,6 @@ export default function App() {
                     body,
                     progress: opts.progress,
                     progressTotal: opts.progressTotal,
-                    action: opts.action,
                   }
                 : t
             );
@@ -617,7 +613,6 @@ export default function App() {
               kind,
               progress: opts.progress,
               progressTotal: opts.progressTotal,
-              action: opts.action,
             },
           ];
         });
@@ -632,7 +627,6 @@ export default function App() {
           kind,
           progress: opts?.progress,
           progressTotal: opts?.progressTotal,
-          action: opts?.action,
         },
       ]);
       if (kind !== "progress") {
@@ -736,6 +730,10 @@ export default function App() {
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
     const unlistenAuto = listen("autoclean-done", () => {
+      // Same reasoning as the sample above — an auto-clean almost always
+      // happens while the window is in the tray, and re-rendering a hidden
+      // webview (plus restarting the gauge tween) buys nothing.
+      if (document.hidden) return;
       getMemoryInfo().then(setInfo).catch(() => {});
     });
     const unlistenSettings = listen("open-settings", () => {
@@ -1556,21 +1554,32 @@ const SettingsPanel = memo(function SettingsPanel({
   };
 
   // Update local state immediately, persist (debounced) shortly after.
+  //
+  // `next` is computed from a ref rather than inside a `setDraft` updater: an
+  // updater must be pure, and this one used to mutate `pendingSave` and schedule
+  // the debounce timer as a side effect. React invokes updaters more than once
+  // (StrictMode does it deliberately), which would schedule the save twice. The
+  // ref keeps successive calls — a slider drag fires many per second — from
+  // losing an update, because it is advanced synchronously.
+  const draftRef = useRef<Config>(config);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
   const set = <K extends keyof Config>(k: K, v: Config[K]) => {
-    setDraft((d) => {
-      const next = { ...d, [k]: v };
-      pendingSave.current = next;
-      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
-      saveTimer.current = window.setTimeout(() => {
-        saveTimer.current = null;
-        const pending = pendingSave.current;
-        if (pending) {
-          pendingSave.current = null;
-          onSaveRef.current(pending);
-        }
-      }, 300);
-      return next;
-    });
+    const next = { ...draftRef.current, [k]: v };
+    draftRef.current = next;
+    setDraft(next);
+    pendingSave.current = next;
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      saveTimer.current = null;
+      const pending = pendingSave.current;
+      if (pending) {
+        pendingSave.current = null;
+        onSaveRef.current(pending);
+      }
+    }, 300);
   };
 
   /**
@@ -1707,7 +1716,10 @@ const SettingsPanel = memo(function SettingsPanel({
           {section === "memory" && (
             <>
               <Toggle label={t("settings.autoReduct")} icon={<IconBolt size={15} />} checked={draft.autoreduct_enable} onChange={(v) => set("autoreduct_enable", v)} />
-              <Slider label={t("settings.autoReductThreshold")} value={draft.autoreduct_value} min={0} max={100} onChange={(v) => set("autoreduct_value", v)} />
+              {/* `min={1}`, not 0: the backend clamps a 0 threshold to 1 (it would
+                  otherwise clean on every tick), so offering 0 would only let the
+                  user pick a value that silently changes on the next reload. */}
+              <Slider label={t("settings.autoReductThreshold")} value={draft.autoreduct_value} min={1} max={100} onChange={(v) => set("autoreduct_value", v)} />
               <Toggle label={t("settings.autoReductInterval")} icon={<IconBell size={15} />} checked={draft.autoreduct_interval_enable} onChange={(v) => set("autoreduct_interval_enable", v)} />
               <Slider label={t("settings.interval")} value={draft.autoreduct_interval_value} min={1} max={1440} onChange={(v) => set("autoreduct_interval_value", v)} />
               <Toggle label={t("settings.allowStandbyCleanup")} icon={<IconShield size={15} />} checked={draft.allow_standby_list_cleanup} onChange={(v) => set("allow_standby_list_cleanup", v)} />
@@ -1784,8 +1796,13 @@ const SettingsPanel = memo(function SettingsPanel({
             <>
               <Select label={t("settings.doubleClickAction")} value={draft.tray_action_dc} onChange={(v) => set("tray_action_dc", v)} options={[[0, t("tray.show")], [1, t("tray.clean")]]} />
               <Select label={t("settings.middleClickAction")} value={draft.tray_action_mc} onChange={(v) => set("tray_action_mc", v)} options={[[0, t("tray.show")], [1, t("tray.clean")]]} />
-              <Slider label={t("settings.warningLevel")} value={draft.tray_level_warning} min={0} max={100} onChange={(v) => set("tray_level_warning", v)} />
-              <Slider label={t("settings.dangerLevel")} value={draft.tray_level_danger} min={0} max={100} onChange={(v) => set("tray_level_danger", v)} />
+              {/* The two thresholds are ordered by construction: warning can
+                  never reach danger, so the sliders cannot express a state the
+                  backend would silently rewrite (`sanitize` forces
+                  `warning < danger`, since the tray icon picks the danger colour
+                  first and an inverted pair would hide the warning state). */}
+              <Slider label={t("settings.warningLevel")} value={draft.tray_level_warning} min={0} max={draft.tray_level_danger - 1} onChange={(v) => set("tray_level_warning", v)} />
+              <Slider label={t("settings.dangerLevel")} value={draft.tray_level_danger} min={draft.tray_level_warning + 1} max={100} onChange={(v) => set("tray_level_danger", v)} />
               <Toggle label={t("settings.showCleanResult")} icon={<IconSparkles size={15} />} checked={draft.balloon_clean_results} onChange={(v) => set("balloon_clean_results", v)} />
             </>
           )}

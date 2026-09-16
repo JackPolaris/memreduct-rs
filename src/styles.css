@@ -1034,33 +1034,6 @@ body {
   filter: brightness(1.05);
 }
 
-/* ===== Result / footnote ===== */
-.result {
-  text-align: center;
-  color: var(--text-soft);
-  font-size: 12.5px;
-  min-height: 18px;
-  line-height: 18px;
-  flex-shrink: 0;
-}
-
-.result strong {
-  color: var(--accent);
-  font-size: 14px;
-}
-
-.footnote {
-  text-align: center;
-  color: var(--muted);
-  font-size: 11px;
-  flex-shrink: 0;
-}
-
-.note-danger {
-  color: var(--danger);
-  font-weight: 600;
-}
-
 /* ===== Settings ===== */
 .settings {
   display: flex;
@@ -1225,13 +1198,6 @@ body {
   flex-shrink: 0;
 }
 
-/* Failed update check / error state. */
-.setrow-value.bad {
-  color: var(--danger);
-  border-color: var(--danger);
-  background: var(--danger-soft);
-}
-
 /* Multi-line diagnostic text (e.g. the reason an update check failed). */
 /* `.hint.update-detail`, `.endpoint-row` and `.endpoint-path` went with the
    About page's diagnostic block: a failed *manual* check reports itself as a
@@ -1372,29 +1338,6 @@ input[type="color"] {
 }
 
 select { max-width: 170px; }
-
-.textinput {
-  flex: 1;
-  min-width: 0;
-  max-width: 220px;
-  background: var(--surface-solid);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  border-radius: 9px;
-  padding: 7px 9px;
-  font-size: 13px;
-}
-
-.setrow-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.setrow-actions .chipbtn {
-  padding: 7px 12px;
-  flex-shrink: 0;
-}
 
 input[type="color"] {
   width: 44px;
