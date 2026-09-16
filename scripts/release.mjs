@@ -144,11 +144,33 @@ function changelogNotes(version) {
   if (start < 0) return "";
   const out = [];
   for (let i = start + 1; i < lines.length; i++) {
-    if (/^##\s/.test(lines[i])) break;
-    const m = lines[i].match(/^\s*[-*]\s+(.+)$/);
-    if (m) out.push(`- ${m[1].replace(/\*\*/g, "").trim()}`);
+    const line = lines[i];
+    if (/^##\s/.test(line)) break;
+    const bullet = line.match(/^\s*[-*]\s+(.+)$/);
+    if (bullet) {
+      out.push(bullet[1].trim());
+      continue;
+    }
+    // The CHANGELOG is hard-wrapped, so a bullet spans several lines. Folding
+    // the continuation lines is required: matching only the `- ` line would cut
+    // every bullet at the first wrap point and leave the updater banner and the
+    // release page mid-sentence ("…霓虹 HUD、终端复古、").
+    if (out.length && /^\s{2,}\S/.test(line)) {
+      // A CJK run has no word delimiter, so joining two CJK halves with a space
+      // would leave a visible gap after a comma ("终端复古、 静音极简"). Only
+      // insert one when at least one side is ASCII.
+      const prev = out[out.length - 1];
+      const next = line.trim();
+      const cjk = (ch) =>
+        /[\u3000-\u303f\u3040-\u30ff\u4e00-\u9fff\uff00-\uffef]/.test(ch);
+      const glue = cjk(prev.slice(-1)) && cjk(next[0]) ? "" : " ";
+      out[out.length - 1] = prev + glue + next;
+    }
   }
-  return out.slice(0, 6).join("\n");
+  return out
+    .slice(0, 6)
+    .map((t) => `- ${t.replace(/\*\*/g, "").replace(/\s+/g, " ").trim()}`)
+    .join("\n");
 }
 
 /** A file inside the OS temp dir — never inside the repo, so `git add -A` cannot pick it up. */

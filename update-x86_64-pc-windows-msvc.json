@@ -1,7 +1,7 @@
 {
   "version": "3.5.15",
-  "notes": "Mem Reduct 3.5.15\n\n- 五种界面风格可选：玻璃拟态（默认）、硬边工业、霓虹 HUD、终端复古、\n- 动效与质感整体升级：环境光层（缓慢漂移的光斑 + 极淡网格与颗粒）、\n- 「关于」页新增外观入口；更新提示从浮层改为布局内横幅，不再遮挡页签栏\n- 发版脚本 `scripts/release.mjs` 固化全部发布步骤（预检 → 改版本 → 构建 →\n- UAC 提权后窗口静默启动、不显示在最前：UAC 子进程由同意服务拉起，\n- 仪表盘进度端帽没对齐：端帽原先靠肉眼目测，现在按环带中线",
-  "pub_date": "2026-09-16T06:46:29Z",
+  "notes": "Mem Reduct 3.5.15\n\n- 五种界面风格可选：玻璃拟态（默认）、硬边工业、霓虹 HUD、终端复古、静音极简。设置 → 外观中点一下即时生效，不必重启，每套都带自己的配色、描边、投影与进度条形态\n- 动效与质感整体升级：环境光层（缓慢漂移的光斑 + 极淡网格与颗粒）、仪表盘重做、清理完成时的轻微庆祝动效；全部只用 `transform`/`opacity`，不占用被清理的那点 CPU\n- 「关于」页新增外观入口；更新提示从浮层改为布局内横幅，不再遮挡页签栏\n- 发版脚本 `scripts/release.mjs` 固化全部发布步骤（预检 → 改版本 → 构建 → 清单 → 发布 → 校验），并改用 Git Data API 绕过对 `github.com` 的代理封锁\n- UAC 提权后窗口静默启动、不显示在最前：UAC 子进程由同意服务拉起，不满足\"前台进程启动\"的置顶条件。现在父进程在提权前调用 `AllowSetForegroundWindow(ASFW_ANY)`，子进程接管后再用 `SetWindowPos` 做 TOPMOST→NOTOPMOST 兜底\n- 仪表盘进度端帽没对齐：端帽原先靠肉眼目测，现在按环带中线（外半径与内半径的均值）计算 `top` 偏移，并加了诊断探针用几何量核对",
+  "pub_date": "2026-09-16T06:48:28Z",
   "platforms": {
     "windows-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TXM2VXJaSmNmOERmK1NCUzMrdjBCL2pQTTRtUjZuRHRSaWhUekRSN1hWd2QreUpBWWpYODE3a3lsODVoWW04WGgwckdaV2lIVU82VkV0eVVYU242bVFnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NTQxMTg5CWZpbGU6TWVtIFJlZHVjdF8zLjUuMTVfeDY0LXNldHVwLmV4ZQpjYTF3eUFhSGtCcGJCRG5NL0cwUElBY1RIbU80M0dMWXhkVEZFWmVlVkFJaXhMa2NBQisxSjdzVW5WQXJZS1U2Zjh2bHhwUzk1NVhCSXJNLzV2UEhDQT09Cg==",
