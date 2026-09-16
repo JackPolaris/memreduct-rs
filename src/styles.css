@@ -936,40 +936,51 @@ body {
   isolation: isolate;
 }
 
-/* ===== Pressure ring on the Clean button =====
-   React Bits' `StarBorder` adapted to a filled button: a rotating conic sweep
-   clipped by the button's own rounded rect (which already has overflow:hidden),
-   shown only while memory pressure is elevated, tinted with the pressure colour.
+/* ===== Pressure state on the Clean button =====
+   While memory pressure is elevated the button is backed by a soft, symmetric
+   halo in the pressure colour (the one the tray icon would use) that slowly
+   breathes. This replaces an earlier rotating conic sweep: a highlight moving
+   around a call-to-action reads as a loading spinner, not as urgency.
 
-   It is a `transform` rotation on an absolutely positioned layer, so the whole
-   thing stays on the compositor — worth caring about in a process whose job is
-   to lower CPU/memory use. */
+   Layering: the halo is a sibling *behind* the button — the button clips its
+   own descendants (overflow:hidden), so an outer glow cannot live inside it.
+   It animates `opacity` only: the blur is rasterised once, then every frame is
+   a compositor fade, which matters in a process whose job is to free CPU. */
 .clean-btn.attention {
   box-shadow:
     0 10px 24px var(--accent-glow),
-    0 0 0 2px var(--ring-color, var(--accent-glow));
+    0 0 0 1.5px color-mix(in srgb, var(--ring-color, var(--accent)) 60%, transparent);
 }
 
-.press-ring {
+.clean-btn-wrap {
+  position: relative;
+  isolation: isolate; /* keep the halo's z-index:-1 between dock and button */
+}
+
+.press-halo {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 260%;
-  aspect-ratio: 1 / 1;
-  margin: -130% 0 0 -130%;
+  inset: 0;
+  border-radius: var(--radius-sm);
   z-index: -1;
   pointer-events: none;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0 62%,
-    rgba(255, 255, 255, 0.42) 74%,
-    transparent 86% 100%
-  );
-  animation: press-spin 2.6s linear infinite;
+  box-shadow:
+    0 1px 14px 1px var(--ring-color, var(--accent-glow)),
+    0 6px 34px 5px color-mix(in srgb, var(--ring-color, var(--accent)) 55%, transparent);
+  opacity: 0.26;
+  animation: press-breathe 3.6s ease-in-out infinite;
 }
 
-@keyframes press-spin {
-  to { transform: rotate(360deg); }
+@keyframes press-breathe {
+  0%, 100% { opacity: 0.16; }
+  50%      { opacity: 0.48; }
+}
+
+/* Hard-edged skins (industrial / terminal) blink a crisp frame instead of
+   breathing a glow — a blurred halo is off-brand for them. The 1% ramp makes
+   the switch effectively a cut without needing `steps()` semantics. */
+@keyframes press-blink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0.12; }
 }
 
 .clean-btn::after {
@@ -2061,6 +2072,16 @@ input[type="color"] {
   transform: translateX(-100%);
 }
 
+/* A blurred glow is off-brand for the hard-edged skin: blink a crisp frame
+   around the button instead, in the pressure colour. */
+.app[data-ui="industrial"] .press-halo {
+  inset: -5px;
+  border-radius: 0;
+  border: 2px solid var(--ring-color, var(--ink));
+  box-shadow: none;
+  animation: press-blink 1.8s linear infinite;
+}
+
 .app[data-ui="industrial"] .tabs,
 .app[data-ui="industrial"] .settings-tabs,
 .app[data-ui="industrial"] .settings-body {
@@ -2673,6 +2694,16 @@ input[type="color"] {
   display: none;
 }
 
+/* Same hard-blink language as industrial, thinner frame to match the 1px
+   dashed border the button itself wears. */
+.app[data-ui="terminal"] .press-halo {
+  inset: -4px;
+  border-radius: 0;
+  border: 1px solid var(--ring-color, var(--accent));
+  box-shadow: none;
+  animation: press-blink 1.8s linear infinite;
+}
+
 .app[data-ui="terminal"] .clean-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   transform: none;
@@ -2776,10 +2807,11 @@ input[type="color"] {
   --shadow-lg: 0 44px 84px -42px rgba(0, 0, 0, 0.9);
 }
 
-/* Silence the decoration this skin is defined by *not* having. */
+/* Silence the decoration this skin is defined by *not* having. The pressure
+   state still shows here through the static `.clean-btn.attention` ring. */
 .app[data-ui="minimal"] .ambient,
 .app[data-ui="minimal"] .bar-fill::after,
-.app[data-ui="minimal"] .press-ring,
+.app[data-ui="minimal"] .press-halo,
 .app[data-ui="minimal"] [data-spot]::before,
 .app[data-ui="minimal"] .gauge::before,
 .app[data-ui="minimal"] .gauge-ticks,
@@ -2888,6 +2920,15 @@ input[type="color"] {
   border-radius: 16px;
   font-weight: 600;
   letter-spacing: 0;
+}
+
+/* The blanket `box-shadow: none` above also ate the pressure ring, leaving the
+   skin with no pressure signal at all. Restore a quiet, static one — no halo,
+   no animation, just the colour the tray icon would use. */
+.app[data-ui="minimal"] .clean-btn.attention {
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--ring-color, var(--accent)) 55%, transparent),
+    var(--shadow-md);
 }
 
 .app[data-ui="minimal"] .clean-btn:hover:not(:disabled) {

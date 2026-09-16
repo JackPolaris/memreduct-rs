@@ -1171,26 +1171,40 @@ export default function App() {
               </div>
             </section>
 
-            {/* React Bits' `StarBorder` idea, adapted to a filled button: while
-                memory pressure is elevated the Clean button gets a sweep that
-                travels around it, tinted with the same colour the tray icon
-                would use. Render-time only — transform animation, so it stays on
-                the compositor and the CPU cost is negligible.
+            {/* While memory pressure is elevated the Clean button breathes: a
+                soft, symmetric halo behind it, tinted with the same colour the
+                tray icon would use. This replaces an earlier rotating conic
+                sweep (React Bits' `StarBorder`) — a highlight travelling around
+                a call-to-action reads as a loading spinner, not as urgency.
+
+                The halo is a sibling *behind* the button on purpose: the button
+                clips its own descendants (overflow:hidden), so an outer glow
+                cannot live inside it. It animates `opacity` only — the blur is
+                rasterised once and every frame is a compositor fade, which
+                matters in a process whose job is to free CPU and memory.
+
+                `--ring-color` is set on the wrapper, not the button: custom
+                properties flow downwards, and the halo (a sibling) has to
+                inherit it too.
 
                 The dock is `position: sticky`: at the default 400x700 window the
                 region grid alone overflows, and the one control this app exists
                 for must not be the thing the user has to scroll to find. */}
             <div className="clean-dock">
-              <button
-                className={`clean-btn ${pressure === "ok" ? "" : "attention"}`}
+              <div
+                className="clean-btn-wrap"
                 style={{ "--ring-color": pressureColor(physPct, warnLevel, dangerLevel) } as React.CSSProperties}
-                onClick={handleClean}
-                disabled={cleaning}
               >
-                {pressure !== "ok" && <span className="press-ring" aria-hidden="true" />}
-                {cleaning ? null : <IconBolt size={20} />}
-                {cleaning ? t("main.cleaning") : t("main.cleanMemory")}
-              </button>
+                {pressure !== "ok" && <span className="press-halo" aria-hidden="true" />}
+                <button
+                  className={`clean-btn ${pressure === "ok" ? "" : "attention"}`}
+                  onClick={handleClean}
+                  disabled={cleaning}
+                >
+                  {cleaning ? null : <IconBolt size={20} />}
+                  {cleaning ? t("main.cleaning") : t("main.cleanMemory")}
+                </button>
+              </div>
             </div>
           </>
         </div>
