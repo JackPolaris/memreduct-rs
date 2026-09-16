@@ -1,11 +1,11 @@
 {
-  "version": "3.5.14",
-  "notes": "Mem Reduct 3.5.14\n\n- 检查更新可能永久卡住：更新插件的 `UpdaterBuilder::timeout` 默认是 `None`，\n- 代理拦截被误报成「未找到发布」：插件对非 2xx 响应不记录错误，\n- 检查更新失败完全不可见：启动时的检查把错误全部 catch 掉，\n- 「关于」页新增更新诊断：上次检查结果（时间、正常/失败、失败原因原文）与\n- 新版本提示条带上更新说明的首条要点，不再只有版本号\n- 移除非交互环境下的确认提示；手动检查的超时从 30s 调整为 35s，",
-  "pub_date": "2026-09-15T03:48:09Z",
+  "version": "3.5.15",
+  "notes": "Mem Reduct 3.5.15\n\n- 五种界面风格可选：玻璃拟态（默认）、硬边工业、霓虹 HUD、终端复古、\n- 动效与质感整体升级：环境光层（缓慢漂移的光斑 + 极淡网格与颗粒）、\n- 「关于」页新增外观入口；更新提示从浮层改为布局内横幅，不再遮挡页签栏\n- 发版脚本 `scripts/release.mjs` 固化全部发布步骤（预检 → 改版本 → 构建 →\n- UAC 提权后窗口静默启动、不显示在最前：UAC 子进程由同意服务拉起，\n- 仪表盘进度端帽没对齐：端帽原先靠肉眼目测，现在按环带中线",
+  "pub_date": "2026-09-16T06:46:29Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TXNReFFyaVZnQlIxUWtsR1RxTmsyMHE0SnpPOGlVNGFkYU5tdFY3L3Q3aW9TNjJRRXZzYzBUWlhUZmExZEhUUnBnTHVwN1duVUlGYmZ6RS9qOHpYRndjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NDQ0MDg3CWZpbGU6TWVtIFJlZHVjdF8zLjUuMTRfeDY0LXNldHVwLmV4ZQpDYnp1cFJnSmFudGFxc0k5dnFWQTdjWnNZU29iSjNhTkg3d2poMDREanhJY2EwRDlHUVd2SlN6bnRWNUVHSUtzdklZd0RIQ0RFVjJndXFPZkpDeUVEdz09Cg==",
-      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.14/Mem.Reduct_3.5.14_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVmFDZWQvTXo4TXM2VXJaSmNmOERmK1NCUzMrdjBCL2pQTTRtUjZuRHRSaWhUekRSN1hWd2QreUpBWWpYODE3a3lsODVoWW04WGgwckdaV2lIVU82VkV0eVVYU242bVFnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NTQxMTg5CWZpbGU6TWVtIFJlZHVjdF8zLjUuMTVfeDY0LXNldHVwLmV4ZQpjYTF3eUFhSGtCcGJCRG5NL0cwUElBY1RIbU80M0dMWXhkVEZFWmVlVkFJaXhMa2NBQisxSjdzVW5WQXJZS1U2Zjh2bHhwUzk1NVhCSXJNLzV2UEhDQT09Cg==",
+      "url": "https://github.com/JackPolaris/memreduct-rs/releases/download/v3.5.15/Mem.Reduct_3.5.15_x64-setup.exe"
     }
   }
 }
